@@ -1,0 +1,51 @@
+# Dependencies & Environments
+venv/
+.venv/
+env/
+node_modules/
+frontend/node_modules/
+
+# Next.js Build Outputs
+.next/
+frontend/.next/
+out/
+frontend/out/
+build/
+frontend/build/
+*.tsbuildinfo
+next-env.d.ts
+
+# Python Caches & Bytecode
+__pycache__/
+backend/app/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Local Databases & WAL files
+*.db
+*.db-wal
+*.db-shm
+why_mistake_coach.db
+backend/why_mistake_coach.db
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+
+# OS & Logs
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDE & Editor Configs
+.vscode/
+.idea/
