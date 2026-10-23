@@ -30,7 +30,7 @@ export default function Sidebar({ onOpenCoach }: SidebarProps) {
   const navItems = [
     { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { label: "Practice", href: "/practice", icon: BookOpen },
-    { label: "PYQs", href: "/pyqs", icon: FileCheck2 },
+    { label: "PYPs", href: "/pyqs", icon: FileCheck2 },
     { label: "Test Series", href: "/tests", icon: GraduationCap },
     { label: "Daily Goals", href: "/goals", icon: Target },
     { label: "My Progress", href: "/progress", icon: LineChart },

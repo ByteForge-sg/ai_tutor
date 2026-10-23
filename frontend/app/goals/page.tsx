@@ -6,25 +6,21 @@ import TopBar from "@/components/layout/TopBar";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 import { fetchDashboard, switchUserExam } from "@/lib/api";
 import { DashboardData, ExamType } from "@/types";
-import { Target, CheckCircle2, Clock, FileSpreadsheet, ArrowRight, Flame, Sparkles } from "lucide-react";
+import { Target, CheckCircle2, Clock, FileSpreadsheet, ArrowRight, Flame } from "lucide-react";
 import Link from "next/link";
 
 export default function GoalsPage() {
   const [currentExam, setCurrentExam] = useState<ExamType>("JEE");
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        setLoading(true);
-        const res = await fetchDashboard("user_demo", currentExam);
+        const res = await fetchDashboard(undefined, currentExam);
         setData(res);
       } catch (e) {
         console.error(e);
-      } finally {
-        setLoading(false);
       }
     }
     load();
@@ -32,12 +28,12 @@ export default function GoalsPage() {
 
   const goals = data?.daily_goals || {
     target_questions: 20,
-    completed_questions: 8,
+    completed_questions: 0,
     target_tests: 1,
     completed_tests: 0,
     target_minutes: 30,
-    completed_minutes: 18,
-    overall_percentage: 40,
+    completed_minutes: 0,
+    overall_percentage: 0,
   };
 
   return (
@@ -49,7 +45,7 @@ export default function GoalsPage() {
           currentExam={currentExam}
           onExamChange={(newExam) => {
             setCurrentExam(newExam);
-            switchUserExam("user_demo", newExam);
+            switchUserExam(undefined, newExam);
           }}
           onOpenCoach={() => setIsCoachOpen(true)}
         />
@@ -86,7 +82,7 @@ export default function GoalsPage() {
 
               <div className="flex items-center gap-2 bg-amber-500/15 px-4 py-2 rounded-[10px] border border-amber-500/30 text-amber-300 text-[13px] font-semibold">
                 <Flame size={18} className="text-amber-400 animate-bounce" />
-                <span>Streak Protected (8/5 required)</span>
+                <span>{data?.current_streak ? `${data.current_streak}-day streak` : "No active streak"}</span>
               </div>
             </div>
 

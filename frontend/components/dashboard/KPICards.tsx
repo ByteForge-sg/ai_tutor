@@ -8,7 +8,7 @@ interface KPICardsProps {
   accuracy: number;
   currentStreak: number;
   testsCompleted: number;
-  monthlyGrowth?: number;
+  monthlyGrowth?: number | null;
 }
 
 export default function KPICards({
@@ -16,7 +16,7 @@ export default function KPICards({
   accuracy,
   currentStreak,
   testsCompleted,
-  monthlyGrowth = 14,
+  monthlyGrowth,
 }: KPICardsProps) {
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -33,8 +33,7 @@ export default function KPICards({
             {questionsSolved.toLocaleString()}
           </div>
           <div className="flex items-center gap-1.5 mt-1 text-[12px] text-[#16A34A] font-medium">
-            <ArrowUpRight size={14} />
-            <span>↑ {monthlyGrowth}% this month</span>
+            {monthlyGrowth == null ? <span className="text-[#64748B]">No prior month data</span> : <><ArrowUpRight size={14} /><span>{monthlyGrowth > 0 ? "↑ " : ""}{monthlyGrowth}% this month</span></>}
           </div>
         </div>
       </div>

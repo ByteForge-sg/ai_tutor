@@ -5,7 +5,85 @@ from typing import Dict, Any, List, Optional
 from app.database import get_db_connection
 from app.mistakes import diagnose_mistake, update_weakness_profile, datetime_now_iso
 
-def create_test_attempt(test_id: str, user_id: str = "user_demo") -> Dict[str, Any]:
+
+def get_test_attempt_result(attempt_id: str, user_id: str) -> Dict[str, Any]:
+    """Build a report from the answer rows already persisted for an attempt."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM attempts WHERE id = ? AND user_id = ?", (attempt_id, user_id))
+    attempt = cursor.fetchone()
+    if not attempt:
+        conn.close()
+        raise ValueError("Attempt not found")
+    cursor.execute("SELECT * FROM tests WHERE id = ?", (attempt["test_id"],))
+    test = cursor.fetchone()
+    cursor.execute("""
+        SELECT qa.*, q.question_text, q.options_json, q.concept, q.explanation, q.common_mistake
+        FROM question_attempts qa JOIN questions q ON q.id = qa.question_id
+        WHERE qa.attempt_id = ? AND qa.user_id = ?
+    """, (attempt_id, user_id))
+    rows = {row["question_id"]: row for row in cursor.fetchall()}
+    question_ids = json.loads(test["question_ids_json"]) if test else list(rows)
+    subject_map: Dict[str, Dict[str, Any]] = {}
+    question_results = []
+    for question_id in question_ids:
+        row = rows.get(question_id)
+        if row is None:
+            continue
+        subject = row["subject"]
+        stats = subject_map.setdefault(subject, {"subject": subject, "total_questions": 0, "attempted": 0, "correct": 0, "incorrect": 0, "score": 0, "total_time": 0})
+        stats["total_questions"] += 1
+        unanswered = row["is_correct"] == -1 or not row["selected_answer"]
+        correct = row["is_correct"] == 1
+        marks = (test["marking_unattempted"] if test else 0) if unanswered else ((test["marking_correct"] if test else 4) if correct else (test["marking_incorrect"] if test else -1))
+        if not unanswered:
+            stats["attempted"] += 1
+            stats["correct" if correct else "incorrect"] += 1
+            stats["score"] += marks
+        stats["total_time"] += row["time_taken_seconds"]
+        question_results.append({
+            "question_id": question_id,
+            "question_text": row["question_text"],
+            "options": json.loads(row["options_json"]),
+            "selected_answer": row["selected_answer"],
+            "correct_answer": row["correct_answer"],
+            "is_correct": correct,
+            "is_unattempted": unanswered,
+            "time_taken_seconds": row["time_taken_seconds"],
+            "marks_awarded": marks,
+            "concept": row["concept"],
+            "explanation": row["explanation"],
+            "common_mistake": row["common_mistake"],
+            "mistake_type": row["mistake_type"],
+            "ai_diagnosis": json.loads(row["ai_diagnosis_json"]) if row["ai_diagnosis_json"] else None,
+        })
+    subject_breakdown = []
+    for stats in subject_map.values():
+        attempted = stats["attempted"]
+        subject_breakdown.append({
+            "subject": stats["subject"], "total_questions": stats["total_questions"],
+            "attempted": attempted, "correct": stats["correct"], "incorrect": stats["incorrect"],
+            "accuracy_percent": round(stats["correct"] / attempted * 100, 1) if attempted else 0.0,
+            "score": stats["score"],
+            "avg_time_seconds": round(stats["total_time"] / stats["total_questions"]) if stats["total_questions"] else 0,
+        })
+    conn.close()
+    attempted = (attempt["correct_count"] or 0) + (attempt["incorrect_count"] or 0)
+    return {
+        "attempt_id": attempt["id"], "test_id": attempt["test_id"],
+        "test_title": attempt["test_title"] or "Test Evaluation", "exam": attempt["exam"],
+        "status": attempt["status"], "started_at": attempt["started_at"],
+        "submitted_at": attempt["submitted_at"] or attempt["started_at"],
+        "score": attempt["score"] or 0, "max_score": attempt["max_score"] or 0,
+        "accuracy_percent": round((attempt["correct_count"] or 0) / attempted * 100, 1) if attempted else 0.0,
+        "total_questions": attempt["total_questions"], "correct_count": attempt["correct_count"] or 0,
+        "incorrect_count": attempt["incorrect_count"] or 0, "unanswered_count": attempt["unanswered_count"] or 0,
+        "time_used_seconds": attempt["time_taken_seconds"] or 0,
+        "integrity_flags_count": attempt["integrity_flags_count"] or 0,
+        "subject_breakdown": subject_breakdown, "question_results": question_results,
+    }
+
+def create_test_attempt(test_id: str, user_id: str) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -156,6 +234,43 @@ def get_active_test_attempt(attempt_id: str) -> Dict[str, Any]:
         "review_status": {}
     }
 
+def save_attempt_answer(attempt_id: str, user_id: str, question_id: str, selected_answer: Optional[str]) -> None:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("BEGIN IMMEDIATE")
+    cursor.execute("SELECT user_id, test_id, status FROM attempts WHERE id = ?", (attempt_id,))
+    attempt = cursor.fetchone()
+    if not attempt or attempt["user_id"] != user_id:
+        conn.close()
+        raise ValueError("Attempt not found")
+    if attempt["status"] != "RUNNING":
+        conn.close()
+        raise ValueError("Attempt is not active")
+    cursor.execute("SELECT question_ids_json FROM tests WHERE id = ?", (attempt["test_id"],))
+    test = cursor.fetchone()
+    if not test or question_id not in json.loads(test["question_ids_json"]):
+        conn.close()
+        raise ValueError("Question is not part of this test")
+    cursor.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
+    question = cursor.fetchone()
+    if not question:
+        conn.close()
+        raise ValueError("Question not found")
+    now = datetime_now_iso()
+    cursor.execute("""
+        INSERT OR REPLACE INTO question_attempts (
+            id, attempt_id, user_id, question_id, selected_answer, correct_answer,
+            is_correct, time_taken_seconds, timestamp, activity_date,
+            exam, subject, chapter, topic, difficulty, mistake_type, ai_diagnosis_json
+        ) VALUES (?, ?, ?, ?, ?, ?, -1, 0, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+    """, (f"test-qa-{attempt_id}-{question_id}", attempt_id, user_id, question_id,
+          selected_answer or None, question["correct_answer"], now,
+          datetime.datetime.now(datetime.timezone.utc).date().isoformat(),
+          question["exam"], question["subject"], question["chapter"],
+          question["topic"], question["difficulty"]))
+    conn.commit()
+    conn.close()
+
 def record_integrity_event(attempt_id: str, event_type: str, details: Optional[str] = None) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
@@ -193,199 +308,128 @@ def record_integrity_event(attempt_id: str, event_type: str, details: Optional[s
         "message": f"Integrity Event Recorded: {event_type}. Controlled exam environment monitoring active."
     }
 
-def submit_test_attempt(attempt_id: str, answers: Dict[str, str], user_id: str = "user_demo") -> Dict[str, Any]:
+def submit_test_attempt(attempt_id: str, answers: Dict[str, str], user_id: str) -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
-
-    cursor.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,))
+    cursor.execute("BEGIN IMMEDIATE")
+    cursor.execute("SELECT * FROM attempts WHERE id = ? AND user_id = ?", (attempt_id, user_id))
     attempt = cursor.fetchone()
     if not attempt:
+        conn.rollback()
         conn.close()
         raise ValueError("Attempt not found")
+    if attempt["status"] == "SUBMITTED" or (attempt["status"] == "AUTO_SUBMITTED" and attempt["submitted_at"]):
+        conn.rollback()
+        conn.close()
+        return get_test_attempt_result(attempt_id, user_id)
+    if attempt["status"] not in ("RUNNING", "AUTO_SUBMITTED"):
+        conn.rollback()
+        conn.close()
+        raise ValueError("Attempt is not active")
 
-    test_id = attempt["test_id"]
-    cursor.execute("SELECT * FROM tests WHERE id = ?", (test_id,))
+    cursor.execute("SELECT * FROM tests WHERE id = ?", (attempt["test_id"],))
     test = cursor.fetchone()
+    if not test:
+        conn.rollback()
+        conn.close()
+        raise ValueError("Test not found")
+    question_ids = json.loads(test["question_ids_json"])
+    if not question_ids:
+        conn.rollback()
+        conn.close()
+        raise ValueError("Test has no questions")
+    placeholders = ",".join("?" for _ in question_ids)
+    cursor.execute(f"SELECT * FROM questions WHERE id IN ({placeholders})", question_ids)
+    questions = {row["id"]: dict(row) for row in cursor.fetchall()}
+    cursor.execute("SELECT question_id, selected_answer FROM question_attempts WHERE attempt_id = ? AND user_id = ?", (attempt_id, user_id))
+    final_answers = {row["question_id"]: row["selected_answer"] for row in cursor.fetchall()}
+    final_answers.update({key: value for key, value in answers.items() if key in question_ids})
 
-    q_ids = json.loads(test["question_ids_json"])
-    placeholders = ",".join("?" for _ in q_ids)
-    cursor.execute(f"SELECT * FROM questions WHERE id IN ({placeholders})", q_ids)
-    q_rows = cursor.fetchall()
-    q_map = {r["id"]: dict(r) for r in q_rows}
-
-    # Evaluate scoring: JEE (+4, -1, 0)
-    total_score = 0
-    correct_count = 0
-    incorrect_count = 0
-    unanswered_count = 0
-
-    now_iso = datetime_now_iso()
-    today_iso = datetime.date.today().isoformat()
-
-    started_at = datetime.datetime.fromisoformat(attempt["started_at"])
+    correct_count = incorrect_count = unanswered_count = total_score = 0
     now = datetime.datetime.now(datetime.timezone.utc)
-    time_used_seconds = min(test["duration_minutes"] * 60, int((now - started_at).total_seconds()))
+    now_iso = now.isoformat()
+    today_iso = now.date().isoformat()
+    started_at = datetime.datetime.fromisoformat(attempt["started_at"])
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=datetime.timezone.utc)
+    time_used = min(test["duration_minutes"] * 60, max(0, int((now - started_at).total_seconds())))
+    per_question_time = max(0, time_used // max(1, len(question_ids)))
 
-    question_results = []
-    subject_stats: Dict[str, Dict[str, Any]] = {}
-
-    for qid in q_ids:
-        q = q_map.get(qid)
-        if not q:
+    for question_id in question_ids:
+        question = questions.get(question_id)
+        if question is None:
             continue
-
-        subj = q["subject"]
-        if subj not in subject_stats:
-            subject_stats[subj] = {
-                "subject": subj,
-                "total_questions": 0,
-                "attempted": 0,
-                "correct": 0,
-                "incorrect": 0,
-                "score": 0,
-                "total_time": 0
-            }
-
-        subject_stats[subj]["total_questions"] += 1
-        selected = answers.get(qid)
-
-        is_unattempted = (selected is None or selected == "")
-        is_corr = False
-        marks = 0
-        mistake_type = None
-        ai_diag = None
-
-        if is_unattempted:
+        selected = final_answers.get(question_id)
+        if not selected:
+            correctness = -1
             unanswered_count += 1
-            is_corr_val = -1
             marks = test["marking_unattempted"]
-        elif selected == q["correct_answer"]:
+        elif selected == question["correct_answer"]:
+            correctness = 1
             correct_count += 1
-            is_corr = True
-            is_corr_val = 1
             marks = test["marking_correct"]
-            subject_stats[subj]["attempted"] += 1
-            subject_stats[subj]["correct"] += 1
-            subject_stats[subj]["score"] += marks
         else:
+            correctness = 0
             incorrect_count += 1
-            is_corr = False
-            is_corr_val = 0
             marks = test["marking_incorrect"]
-            subject_stats[subj]["attempted"] += 1
-            subject_stats[subj]["incorrect"] += 1
-            subject_stats[subj]["score"] += marks
-
-            # Trigger AI Mistake Diagnosis
-            ai_diag = diagnose_mistake(q, selected, time_taken_seconds=60, user_id=user_id)
-            mistake_type = ai_diag["mistakeType"]
-
-            # Update weakness profile in real time!
-            update_weakness_profile(user_id, q, is_correct=False, mistake_type=mistake_type)
-
         total_score += marks
-        q_time = max(30, time_used_seconds // max(1, len(q_ids)))
-        subject_stats[subj]["total_time"] += q_time
-
-        # Store in question_attempts to feed the feedback loop!
         cursor.execute("""
             INSERT OR REPLACE INTO question_attempts (
                 id, attempt_id, user_id, question_id, selected_answer, correct_answer,
                 is_correct, time_taken_seconds, timestamp, activity_date,
                 exam, subject, chapter, topic, difficulty, mistake_type, ai_diagnosis_json
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            f"test-qa-{attempt_id}-{qid}",
-            attempt_id,
-            user_id,
-            qid,
-            selected,
-            q["correct_answer"],
-            is_corr_val,
-            q_time,
-            now_iso,
-            today_iso,
-            q["exam"],
-            q["subject"],
-            q["chapter"],
-            q["topic"],
-            q["difficulty"],
-            mistake_type,
-            json.dumps(ai_diag) if ai_diag else None
-        ))
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL)
+        """, (f"test-qa-{attempt_id}-{question_id}", attempt_id, user_id, question_id,
+              selected or None, question["correct_answer"], correctness, per_question_time,
+              now_iso, today_iso, question["exam"], question["subject"], question["chapter"],
+              question["topic"], question["difficulty"]))
 
-        question_results.append({
-            "question_id": qid,
-            "question_text": q["question_text"],
-            "options": json.loads(q["options_json"]),
-            "selected_answer": selected,
-            "correct_answer": q["correct_answer"],
-            "is_correct": is_corr,
-            "is_unattempted": is_unattempted,
-            "time_taken_seconds": q_time,
-            "marks_awarded": marks,
-            "concept": q["concept"],
-            "explanation": q["explanation"],
-            "common_mistake": q["common_mistake"],
-            "mistake_type": mistake_type,
-            "ai_diagnosis": ai_diag
-        })
-
-    total_attempted = correct_count + incorrect_count
-    accuracy = round((correct_count / total_attempted * 100), 1) if total_attempted > 0 else 0.0
-
-    # Build subject breakdown list
-    subject_breakdown = []
-    for s_name, s_data in subject_stats.items():
-        att = s_data["attempted"]
-        s_acc = round((s_data["correct"] / att * 100), 1) if att > 0 else 0.0
-        avg_t = round(s_data["total_time"] / s_data["total_questions"]) if s_data["total_questions"] > 0 else 0
-        subject_breakdown.append({
-            "subject": s_name,
-            "total_questions": s_data["total_questions"],
-            "attempted": att,
-            "correct": s_data["correct"],
-            "incorrect": s_data["incorrect"],
-            "accuracy_percent": s_acc,
-            "score": s_data["score"],
-            "avg_time_seconds": avg_t
-        })
-
+    final_status = "AUTO_SUBMITTED" if attempt["status"] == "AUTO_SUBMITTED" else "SUBMITTED"
     cursor.execute("""
-        UPDATE attempts
-        SET status = 'SUBMITTED',
-            submitted_at = ?,
-            score = ?,
-            correct_count = ?,
-            incorrect_count = ?,
-            unanswered_count = ?,
-            time_taken_seconds = ?
-        WHERE id = ?
-    """, (now_iso, total_score, correct_count, incorrect_count, unanswered_count, time_used_seconds, attempt_id))
-
+        UPDATE attempts SET status = ?, submitted_at = ?, score = ?,
+            correct_count = ?, incorrect_count = ?, unanswered_count = ?, time_taken_seconds = ?
+        WHERE id = ? AND user_id = ? AND status IN ('RUNNING', 'AUTO_SUBMITTED')
+    """, (final_status, now_iso, total_score, correct_count, incorrect_count, unanswered_count, time_used, attempt_id, user_id))
     conn.commit()
     conn.close()
+    return get_test_attempt_result(attempt_id, user_id)
 
-    return {
-        "attempt_id": attempt_id,
-        "test_id": test["id"],
-        "test_title": test["title"],
-        "exam": test["exam"],
-        "status": "SUBMITTED",
-        "started_at": attempt["started_at"],
-        "submitted_at": now_iso,
-        "score": total_score,
-        "max_score": test["total_marks"],
-        "accuracy_percent": accuracy,
-        "total_questions": len(q_ids),
-        "correct_count": correct_count,
-        "incorrect_count": incorrect_count,
-        "unanswered_count": unanswered_count,
-        "time_used_seconds": time_used_seconds,
-        "integrity_flags_count": attempt["integrity_flags_count"] or 0,
-        "subject_breakdown": subject_breakdown,
-        "question_results": question_results
-    }
+
+def process_attempt_analytics(attempt_id: str, user_id: str) -> bool:
+    """Analyze incorrect answers once, after the fast result has been saved."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("BEGIN IMMEDIATE")
+    cursor.execute("SELECT status, analysis_processed_at FROM attempts WHERE id = ? AND user_id = ?", (attempt_id, user_id))
+    attempt = cursor.fetchone()
+    if not attempt:
+        conn.rollback()
+        conn.close()
+        raise ValueError("Attempt not found")
+    if attempt["status"] not in ("SUBMITTED", "AUTO_SUBMITTED"):
+        conn.rollback()
+        conn.close()
+        raise ValueError("Attempt has not been submitted")
+    if attempt["analysis_processed_at"]:
+        conn.rollback()
+        conn.close()
+        return False
+    cursor.execute("""
+        SELECT qa.question_id, qa.selected_answer, q.*
+        FROM question_attempts qa JOIN questions q ON q.id = qa.question_id
+        WHERE qa.attempt_id = ? AND qa.user_id = ? AND qa.is_correct = 0
+    """, (attempt_id, user_id))
+    for row in cursor.fetchall():
+        question = dict(row)
+        diagnosis = diagnose_mistake(question, row["selected_answer"] or "", time_taken_seconds=row["time_taken_seconds"] if "time_taken_seconds" in row.keys() else 60, user_id=user_id)
+        cursor.execute("UPDATE question_attempts SET mistake_type = ?, ai_diagnosis_json = ? WHERE attempt_id = ? AND question_id = ? AND user_id = ?",
+                       (diagnosis["mistakeType"], json.dumps(diagnosis), attempt_id, row["question_id"], user_id))
+        update_weakness_profile(user_id, question, False, diagnosis["mistakeType"], connection=conn)
+    cursor.execute("UPDATE attempts SET analysis_processed_at = ? WHERE id = ? AND user_id = ?",
+                   (datetime_now_iso(), attempt_id, user_id))
+    conn.commit()
+    conn.close()
+    return True
 
 def record_practice_answer(user_id: str, question_id: str, selected_answer: str, time_taken_seconds: int = 45) -> Dict[str, Any]:
     conn = get_db_connection()

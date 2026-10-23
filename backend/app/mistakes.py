@@ -19,7 +19,8 @@ def diagnose_mistake(
     question: Dict[str, Any],
     selected_answer: str,
     time_taken_seconds: int = 45,
-    user_id: str = "user_demo"
+    *,
+    user_id: str
 ) -> Dict[str, Any]:
     """
     AI Mistake Diagnosis engine.
@@ -90,11 +91,14 @@ def diagnose_mistake(
         "recommendation": recommendation
     }
 
-def update_weakness_profile(user_id: str, question: Dict[str, Any], is_correct: bool, mistake_type: Optional[str]):
+def update_weakness_profile(
+    user_id: str, question: Dict[str, Any], is_correct: bool,
+    mistake_type: Optional[str], *, connection=None,
+):
     """
     Updates the student's dynamic weakness profile based on real performance.
     """
-    conn = get_db_connection()
+    conn = connection or get_db_connection()
     cursor = conn.cursor()
     
     topic = question["topic"]
@@ -145,8 +149,9 @@ def update_weakness_profile(user_id: str, question: Dict[str, Any], is_correct: 
                 VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, 'recurring')
             """, (weakness_id, user_id, exam, subject, chapter, topic, mistake_type, accuracy_percent, now))
 
-    conn.commit()
-    conn.close()
+    if connection is None:
+        conn.commit()
+        conn.close()
 
 def datetime_now_iso() -> str:
     import datetime

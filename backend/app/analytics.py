@@ -42,7 +42,7 @@ def calculate_streak(active_dates_set: set, reference_date: datetime.date) -> tu
 
     return current_streak, max(longest_streak, current_streak)
 
-def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Dict[str, Any]:
+def get_dashboard_analytics(user_id: str, exam: str = "JEE") -> Dict[str, Any]:
     conn = get_db_connection()
     cursor = conn.cursor()
 
@@ -50,20 +50,13 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
     cursor.execute("SELECT id, email, name, target_exam, avatar, created_at FROM users WHERE id = ?", (user_id,))
     user_row = cursor.fetchone()
     if not user_row:
-        user_data = {
-            "id": user_id,
-            "email": "student@whycoach.ai",
-            "name": "Aditya Sharma",
-            "target_exam": exam,
-            "avatar": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
-            "created_at": "2026-05-01T08:00:00Z"
-        }
-    else:
-        user_data = dict(user_row)
+        conn.close()
+        raise ValueError("User not found")
+    user_data = dict(user_row)
 
     # 1. Total questions solved (completed attempts)
     cursor.execute("""
-        SELECT COUNT(*),
+        SELECT SUM(CASE WHEN is_correct != -1 THEN 1 ELSE 0 END),
                SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END),
                SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END)
         FROM question_attempts
@@ -73,7 +66,55 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
     total_solved = agg[0] or 0
     total_correct = agg[1] or 0
     total_incorrect = agg[2] or 0
-    overall_accuracy = round((total_correct / total_solved * 100), 1) if total_solved > 0 else 0.0
+    total_answered = total_correct + total_incorrect
+    overall_accuracy = round((total_correct / total_answered * 100), 1) if total_answered > 0 else 0.0
+    today = datetime.datetime.now(datetime.timezone.utc).date()
+
+    month_start = today.replace(day=1)
+    previous_month_end = month_start - datetime.timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
+    cursor.execute("""
+        SELECT COUNT(*) FROM question_attempts
+        WHERE user_id = ? AND exam = ? AND is_correct != -1
+          AND activity_date >= ? AND activity_date < ?
+    """, (user_id, exam, month_start.isoformat(), (month_start + datetime.timedelta(days=32)).replace(day=1).isoformat()))
+    this_month_questions = cursor.fetchone()[0] or 0
+    cursor.execute("""
+        SELECT COUNT(*) FROM question_attempts
+        WHERE user_id = ? AND exam = ? AND is_correct != -1
+          AND activity_date >= ? AND activity_date < ?
+    """, (user_id, exam, previous_month_start.isoformat(), month_start.isoformat()))
+    previous_month_questions = cursor.fetchone()[0] or 0
+    monthly_growth = round((this_month_questions - previous_month_questions) / previous_month_questions * 100, 1) if previous_month_questions else None
+
+    cursor.execute("""
+        SELECT subject, SUM(CASE WHEN is_correct != -1 THEN 1 ELSE 0 END) AS solved,
+               SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) AS correct,
+               SUM(CASE WHEN is_correct != -1 THEN 1 ELSE 0 END) AS attempted
+        FROM question_attempts
+        WHERE user_id = ? AND exam = ?
+        GROUP BY subject ORDER BY subject
+    """, (user_id, exam))
+    subject_performance = [
+        {"subject": r["subject"], "solved": r["solved"],
+         "accuracy": round(r["correct"] / r["attempted"] * 100, 1) if r["attempted"] else None}
+        for r in cursor.fetchall()
+    ]
+
+    cursor.execute("""
+        SELECT substr(activity_date, 1, 7) AS month,
+               COUNT(*) AS questions,
+               SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END) AS correct,
+               SUM(CASE WHEN is_correct != -1 THEN 1 ELSE 0 END) AS attempted
+        FROM question_attempts
+        WHERE user_id = ? AND exam = ? AND is_correct != -1 AND activity_date >= ?
+        GROUP BY substr(activity_date, 1, 7) ORDER BY month
+    """, (user_id, exam, (today - datetime.timedelta(days=180)).isoformat()))
+    monthly_trends = [
+        {"month": r["month"], "questions": r["questions"],
+         "accuracy": round(r["correct"] / r["attempted"] * 100, 1) if r["attempted"] else None}
+        for r in cursor.fetchall()
+    ]
 
     # 2. Total tests completed
     cursor.execute("""
@@ -83,7 +124,6 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
     tests_completed = cursor.fetchone()[0] or 0
 
     # 3. Daily activity breakdown for past 180 days (6 months)
-    today = datetime.date(2026, 10, 22)
     start_date = today - datetime.timedelta(days=180)
 
     cursor.execute("""
@@ -94,7 +134,7 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
                SUM(time_taken_seconds) as total_time,
                SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END) as mistakes
         FROM question_attempts
-        WHERE user_id = ? AND exam = ? AND activity_date >= ?
+        WHERE user_id = ? AND exam = ? AND activity_date >= ? AND is_correct != -1
         GROUP BY activity_date
         ORDER BY activity_date ASC
     """, (user_id, exam, start_date.isoformat()))
@@ -180,6 +220,8 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
     """, (user_id, exam))
     weakest_row = cursor.fetchone()
     weakest_area = dict(weakest_row) if weakest_row else None
+    cursor.execute("SELECT COUNT(*) FROM weaknesses WHERE user_id = ? AND exam = ?", (user_id, exam))
+    weaknesses_count = cursor.fetchone()[0] or 0
 
     # 5. Recurring Mistake
     cursor.execute("""
@@ -247,7 +289,7 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
                qa.is_correct, qa.time_taken_seconds, qa.timestamp, qa.topic, qa.mistake_type
         FROM question_attempts qa
         JOIN questions q ON qa.question_id = q.id
-        WHERE qa.user_id = ? AND qa.exam = ?
+        WHERE qa.user_id = ? AND qa.exam = ? AND qa.is_correct != -1
         ORDER BY qa.timestamp DESC
         LIMIT 5
     """, (user_id, exam))
@@ -263,8 +305,11 @@ def get_dashboard_analytics(user_id: str = "user_demo", exam: str = "JEE") -> Di
         "current_streak": current_streak,
         "longest_streak": longest_streak,
         "tests_completed": tests_completed,
-        "monthly_growth_percent": 14.0,
+        "monthly_growth_percent": monthly_growth,
+        "monthly_trends": monthly_trends,
+        "subject_performance": subject_performance,
         "weakest_area": weakest_area,
+        "weaknesses_count": weaknesses_count,
         "recurring_mistake": recurring_mistake,
         "daily_goals": daily_goals,
         "contribution_grid": {

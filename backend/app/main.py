@@ -1,34 +1,64 @@
 import os
 import json
+import logging
+from pathlib import Path
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
+from typing import List, Optional, Dict, Any
+
+import jwt
+from pwdlib import PasswordHash
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Depends, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from typing import List, Optional, Dict, Any
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
 from app.database import init_db, get_db_connection
 from app.seed_data import seed_database
 from app.models import (
-    UserLoginRequest, UserResponse, QuestionOut, QuestionDetail,
+    UserSignupRequest, UserLoginRequest, UserResponse, AuthResponse,
+    ExamUpdateRequest, QuestionOut, QuestionDetail,
     TestListItem, StartTestRequest, TestAttemptOut, SaveAnswerRequest,
     IntegrityEventRequest, SubmitTestRequest, TestResultOut,
     PracticeAnswerRequest, PracticeAnswerResponse, MistakeDiagnosisOut,
     DashboardSummaryOut, AIChatRequest, AIChatResponse,
-    FixWeaknessInterventionOut, CompleteInterventionRequest, InterventionResultOut,
-    WeaknessItem, ContributionGridData
+    FixWeaknessInterventionOut, CompleteInterventionRequest,
+    InterventionResultOut, WeaknessItem
 )
 from app.attempts import (
     create_test_attempt, get_active_test_attempt, record_integrity_event,
-    submit_test_attempt, record_practice_answer
+    submit_test_attempt, record_practice_answer, save_attempt_answer,
+    process_attempt_analytics,
 )
 from app.mistakes import diagnose_mistake
 from app.weaknesses import get_user_weaknesses, generate_intervention, complete_intervention
 from app.analytics import get_dashboard_analytics
 from app.ai import generate_chat_response
 
+logger = logging.getLogger(__name__)
+app_logger = logging.getLogger("app")
+app_logger.setLevel(logging.INFO)
+if not app_logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s: %(name)s: %(message)s"))
+    app_logger.addHandler(handler)
+
 app = FastAPI(
     title="WHY — AI Mistake Coach API",
     description="Backend engine powering the JEE/NEET Question -> Attempt -> Feedback -> Mistake -> Pattern -> Intervention -> Reattempt -> Improvement feedback loop.",
     version="1.0.0"
 )
+
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+
+JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not JWT_SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY must be set in backend/.env")
+
+JWT_ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 60
+password_hash = PasswordHash.recommended()
+bearer_scheme = HTTPBearer(auto_error=False)
 
 # Enable CORS for frontend development and demo
 app.add_middleware(
@@ -41,61 +71,200 @@ app.add_middleware(
 
 @app.on_event("startup")
 def startup_event():
-    # Initialize DB and seed initial data if empty
-    seed_database()
+    # Always run safe schema migrations first. Seed only a genuinely empty
+    # question catalog so startup cannot replace existing users or content.
+    init_db()
+    conn = get_db_connection()
+    try:
+        question_count = conn.execute(
+            "SELECT COUNT(*) FROM questions"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+
+    if question_count == 0:
+        seed_database()
+
     print("WHY Backend initialized with data-driven feedback loop.")
 
 # ----------------- AUTH & USER -----------------
-@app.post("/auth/login", response_model=UserResponse)
-def login(req: UserLoginRequest):
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (req.email,))
-    user = cursor.fetchone()
-    
-    if not user:
-        # Create user
-        uid = f"user-{req.email.split('@')[0]}"
-        name = req.name or req.email.split('@')[0].capitalize()
-        exam = req.target_exam or "JEE"
-        avatar = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80"
-        cursor.execute("""
-            INSERT INTO users (id, email, name, target_exam, avatar, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-        """, (uid, req.email, name, exam, avatar))
-        conn.commit()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (uid,))
-        user = cursor.fetchone()
-    elif req.target_exam and req.target_exam != user["target_exam"]:
-        # Update target exam if requested
-        cursor.execute("UPDATE users SET target_exam = ? WHERE id = ?", (req.target_exam, user["id"]))
-        conn.commit()
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user["id"],))
-        user = cursor.fetchone()
+def create_access_token(user_id: str) -> str:
+    expires = datetime.now(timezone.utc) + timedelta(
+        minutes=ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    return jwt.encode(
+        {"sub": user_id, "exp": expires},
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM,
+    )
 
-    user_dict = dict(user)
-    conn.close()
-    return user_dict
 
-@app.get("/users/{user_id}", response_model=UserResponse)
-def get_user_profile(user_id: str):
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+):
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        payload = jwt.decode(
+            credentials.credentials,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+        )
+        user_id = payload.get("sub")
+        if not user_id:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    except jwt.InvalidTokenError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    conn.close()
+    try:
+        user = conn.execute(
+            "SELECT id, email, name, target_exam, avatar, created_at "
+            "FROM users WHERE id = ?",
+            (user_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=401, detail="User not found")
     return dict(user)
 
-@app.patch("/users/{user_id}/exam")
-def update_user_exam(user_id: str, exam: str = Query(..., pattern="^(JEE|NEET)$")):
+
+def ensure_attempt_owner(attempt_id: str, user_id: str) -> None:
     conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("UPDATE users SET target_exam = ? WHERE id = ?", (exam, user_id))
-    conn.commit()
-    conn.close()
-    return {"status": "success", "target_exam": exam}
+    try:
+        attempt = conn.execute(
+            "SELECT user_id FROM attempts WHERE id = ?", (attempt_id,)
+        ).fetchone()
+    finally:
+        conn.close()
+    if not attempt:
+        raise HTTPException(status_code=404, detail="Attempt not found")
+    if attempt["user_id"] != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+
+@app.post("/auth/signup", response_model=AuthResponse, status_code=status.HTTP_201_CREATED)
+def signup(req: UserSignupRequest):
+    email = str(req.email).strip().lower()
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Name cannot be blank")
+
+    uid = f"user-{uuid4().hex}"
+    avatar = (
+        "https://images.unsplash.com/photo-1534528741775-53994a69daeb"
+        "?auto=format&fit=crop&w=256&q=80"
+    )
+    hashed_password = password_hash.hash(req.password)
+    created_at = datetime.now(timezone.utc).isoformat()
+
+    conn = get_db_connection()
+    try:
+        existing = conn.execute(
+            "SELECT id FROM users WHERE lower(email) = ?", (email,)
+        ).fetchone()
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="An account with this email already exists",
+            )
+
+        conn.execute(
+            """INSERT INTO users
+               (id, email, name, target_exam, avatar, created_at, password_hash)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (uid, email, name, req.target_exam.value, avatar, created_at, hashed_password),
+        )
+        conn.commit()
+        user = conn.execute(
+            """SELECT id, email, name, target_exam, avatar, created_at
+               FROM users WHERE id = ?""",
+            (uid,),
+        ).fetchone()
+    except HTTPException:
+        raise
+    except Exception as exc:
+        conn.rollback()
+        raise HTTPException(status_code=500, detail="Could not create account") from exc
+    finally:
+        conn.close()
+
+    return {
+        "access_token": create_access_token(uid),
+        "token_type": "bearer",
+        "user": dict(user),
+    }
+
+
+@app.post("/auth/login", response_model=AuthResponse)
+def login(req: UserLoginRequest):
+    email = str(req.email).strip().lower()
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            "SELECT * FROM users WHERE lower(email) = ?", (email,)
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not user or not user["password_hash"]:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    try:
+        valid_password = password_hash.verify(req.password, user["password_hash"])
+    except Exception:
+        valid_password = False
+    if not valid_password:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+
+    safe_user = {
+        key: user[key]
+        for key in ("id", "email", "name", "target_exam", "avatar", "created_at")
+    }
+    return {
+        "access_token": create_access_token(user["id"]),
+        "token_type": "bearer",
+        "user": safe_user,
+    }
+
+
+@app.get("/users/me", response_model=UserResponse)
+def get_my_profile(current_user: dict = Depends(get_current_user)):
+    return current_user
+
+
+@app.patch("/users/me/exam", response_model=UserResponse)
+def update_my_exam(
+    req: ExamUpdateRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "UPDATE users SET target_exam = ? WHERE id = ?",
+            (req.target_exam.value, current_user["id"]),
+        )
+        conn.commit()
+        user = conn.execute(
+            """SELECT id, email, name, target_exam, avatar, created_at
+               FROM users WHERE id = ?""",
+            (current_user["id"],),
+        ).fetchone()
+        return dict(user)
+    finally:
+        conn.close()
+
 
 # ----------------- QUESTIONS & PRACTICE -----------------
 @app.get("/questions", response_model=List[QuestionOut])
@@ -182,10 +351,12 @@ def get_question_detail(question_id: str):
     }
 
 @app.post("/practice/answer", response_model=PracticeAnswerResponse)
-def submit_practice_answer(req: PracticeAnswerRequest):
+def submit_practice_answer(
+    req: PracticeAnswerRequest, current_user: dict = Depends(get_current_user)
+):
     try:
         return record_practice_answer(
-            user_id=req.user_id,
+            user_id=current_user["id"],
             question_id=req.question_id,
             selected_answer=req.selected_answer,
             time_taken_seconds=req.time_taken_seconds
@@ -195,26 +366,61 @@ def submit_practice_answer(req: PracticeAnswerRequest):
 
 # ----------------- TESTS & FULLSCREEN EXAM -----------------
 @app.get("/tests", response_model=List[TestListItem])
-def list_tests(exam: Optional[str] = "JEE", user_id: str = "user_demo"):
+def list_tests(
+    exam: Optional[str] = "JEE", category: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM tests WHERE exam = ?", (exam,))
+    if category == "PYP":
+        # Build stable paper definitions from the catalog's actual PYQ records.
+        cursor.execute("""
+            SELECT exam, year, GROUP_CONCAT(id) AS question_ids, COUNT(*) AS count
+            FROM questions WHERE exam = ? AND source_type = 'PYQ'
+            GROUP BY exam, year ORDER BY year DESC
+        """, (exam,))
+        for paper in cursor.fetchall():
+            paper_id = f"pyp-{paper['exam'].lower()}-{paper['year']}"
+            ids = paper["question_ids"].split(",")
+            cursor.execute("""
+                INSERT OR IGNORE INTO tests (
+                    id, title, exam, test_type, subject, chapter, questions_count,
+                    duration_minutes, total_marks, marking_correct, marking_incorrect,
+                    marking_unattempted, difficulty, question_ids_json
+                ) VALUES (?, ?, ?, 'Previous Year Paper', 'All Subjects', ?, ?, ?, ?, 4, -1, 0, 'Mixed', ?)
+            """, (paper_id, f"{paper['exam']} Previous Year Paper {paper['year']}",
+                  paper["exam"], str(paper["year"]), len(ids), max(1, len(ids) * 2),
+                  len(ids) * 4, json.dumps(ids)))
+        conn.commit()
+        cursor.execute("SELECT * FROM tests WHERE exam = ? AND test_type = 'Previous Year Paper' ORDER BY title DESC", (exam,))
+    elif category == "TEST_SERIES":
+        cursor.execute("SELECT * FROM tests WHERE exam = ? AND test_type != 'Previous Year Paper'", (exam,))
+    else:
+        cursor.execute("SELECT * FROM tests WHERE exam = ? AND test_type != 'Previous Year Paper'", (exam,))
     rows = cursor.fetchall()
     
     # Check attempt status for user
     res = []
     for r in rows:
         cursor.execute("""
-            SELECT status, score FROM attempts
+            SELECT id, status, score, max_score, started_at FROM attempts
             WHERE user_id = ? AND test_id = ?
             ORDER BY started_at DESC LIMIT 1
-        """, (user_id, r["id"]))
+        """, (current_user["id"], r["id"]))
         att = cursor.fetchone()
         att_status = "NOT_STARTED"
         last_score = None
         if att:
             att_status = att["status"]
             last_score = att["score"]
+
+        cursor.execute("""
+            SELECT id, status, score, max_score, submitted_at
+            FROM attempts WHERE user_id = ? AND test_id = ?
+              AND status IN ('SUBMITTED', 'AUTO_SUBMITTED')
+            ORDER BY started_at DESC
+        """, (current_user["id"], r["id"]))
+        submitted_attempts = [dict(a) for a in cursor.fetchall()]
 
         res.append({
             "id": r["id"],
@@ -231,42 +437,83 @@ def list_tests(exam: Optional[str] = "JEE", user_id: str = "user_demo"):
             "marking_unattempted": r["marking_unattempted"],
             "difficulty": r["difficulty"],
             "attempt_status": att_status,
-            "last_score": last_score
+            "last_score": last_score,
+            "attempts": submitted_attempts,
         })
     conn.close()
     return res
 
 @app.post("/attempts", response_model=TestAttemptOut)
-def start_exam(req: StartTestRequest):
+def start_exam(
+    req: StartTestRequest, current_user: dict = Depends(get_current_user)
+):
     try:
-        return create_test_attempt(test_id=req.test_id, user_id=req.user_id)
+        return create_test_attempt(test_id=req.test_id, user_id=current_user["id"])
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/attempts/{attempt_id}", response_model=TestAttemptOut)
-def get_exam_state(attempt_id: str):
+def get_exam_state(
+    attempt_id: str, current_user: dict = Depends(get_current_user)
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
     try:
         return get_active_test_attempt(attempt_id)
     except Exception as e:
         raise HTTPException(status_code=404, detail=str(e))
 
+@app.put("/attempts/{attempt_id}/answers")
+def save_exam_answer(
+    attempt_id: str, req: SaveAnswerRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
+    try:
+        save_attempt_answer(attempt_id, current_user["id"], req.question_id, req.selected_answer)
+        return {"saved": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 @app.post("/attempts/{attempt_id}/integrity")
-def post_integrity_event(attempt_id: str, req: IntegrityEventRequest):
+def post_integrity_event(
+    attempt_id: str, req: IntegrityEventRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
     try:
         return record_integrity_event(attempt_id, req.event_type, req.details)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/attempts/{attempt_id}/submit", response_model=TestResultOut)
-def submit_exam(attempt_id: str, req: SubmitTestRequest, user_id: str = "user_demo"):
+def submit_exam(
+    attempt_id: str, req: SubmitTestRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
     try:
         answers = req.answers or {}
-        return submit_test_attempt(attempt_id=attempt_id, answers=answers, user_id=user_id)
+        return submit_test_attempt(
+            attempt_id=attempt_id, answers=answers, user_id=current_user["id"]
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+@app.post("/attempts/{attempt_id}/analytics")
+def process_submitted_attempt_analytics(
+    attempt_id: str, current_user: dict = Depends(get_current_user),
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
+    try:
+        return {"processed": process_attempt_analytics(attempt_id, current_user["id"])}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
 @app.get("/results/{attempt_id}", response_model=TestResultOut)
-def get_exam_results(attempt_id: str, user_id: str = "user_demo"):
+def get_exam_results(
+    attempt_id: str, current_user: dict = Depends(get_current_user)
+):
+    ensure_attempt_owner(attempt_id, current_user["id"])
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM attempts WHERE id = ?", (attempt_id,))
@@ -386,40 +633,57 @@ def get_exam_results(attempt_id: str, user_id: str = "user_demo"):
 
 # ----------------- ANALYTICS & DASHBOARD -----------------
 @app.get("/analytics/dashboard", response_model=DashboardSummaryOut)
-def get_dashboard(user_id: str = "user_demo", exam: str = "JEE"):
-    return get_dashboard_analytics(user_id=user_id, exam=exam)
+def get_dashboard(
+    exam: str = "JEE", current_user: dict = Depends(get_current_user)
+):
+    return get_dashboard_analytics(user_id=current_user["id"], exam=exam)
 
 @app.get("/analytics/weaknesses", response_model=List[WeaknessItem])
-def get_weaknesses_list(user_id: str = "user_demo", exam: str = "JEE"):
-    return get_user_weaknesses(user_id=user_id, exam=exam)
+def get_weaknesses_list(
+    exam: str = "JEE", current_user: dict = Depends(get_current_user)
+):
+    return get_user_weaknesses(user_id=current_user["id"], exam=exam)
 
 # ----------------- FIX THIS WEAKNESS INTERVENTIONS -----------------
 @app.post("/weaknesses/{topic}/intervention", response_model=FixWeaknessInterventionOut)
-def start_topic_intervention(topic: str, user_id: str = "user_demo", exam: str = "JEE"):
+def start_topic_intervention(
+    topic: str, exam: str = "JEE", current_user: dict = Depends(get_current_user)
+):
     try:
-        return generate_intervention(user_id=user_id, topic=topic, exam=exam)
+        return generate_intervention(user_id=current_user["id"], topic=topic, exam=exam)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/weaknesses/interventions/{intervention_id}/complete", response_model=InterventionResultOut)
-def submit_intervention(intervention_id: str, req: CompleteInterventionRequest, user_id: str = "user_demo"):
+def submit_intervention(
+    intervention_id: str, req: CompleteInterventionRequest,
+    current_user: dict = Depends(get_current_user),
+):
     try:
-        return complete_intervention(user_id=user_id, intervention_id=intervention_id, answers=req.answers)
+        return complete_intervention(
+            user_id=current_user["id"], intervention_id=intervention_id, answers=req.answers
+        )
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 # ----------------- AI CHAT & DIAGNOSIS -----------------
 @app.post("/ai/chat", response_model=AIChatResponse)
-def chat_with_coach(req: AIChatRequest):
-    return generate_chat_response(
-        user_id=req.user_id,
-        message=req.message,
-        current_attempt_id=req.current_attempt_id,
-        context=req.context
-    )
+def chat_with_coach(
+    req: AIChatRequest, current_user: dict = Depends(get_current_user)
+):
+    try:
+        return generate_chat_response(
+            user_id=current_user["id"],
+            message=req.message,
+            current_attempt_id=req.current_attempt_id,
+            context=req.context
+        )
+    except RuntimeError as exc:
+        logger.warning("WHY AI chat request failed: %s", exc)
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 @app.post("/ai/analyze-mistake", response_model=MistakeDiagnosisOut)
-def analyze_single_mistake(question_id: str, selected_answer: str, time_taken_seconds: int = 45):
+def analyze_single_mistake(question_id: str, selected_answer: str, time_taken_seconds: int = 45, current_user: dict = Depends(get_current_user)):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM questions WHERE id = ?", (question_id,))
@@ -428,7 +692,7 @@ def analyze_single_mistake(question_id: str, selected_answer: str, time_taken_se
     if not q:
         raise HTTPException(status_code=404, detail="Question not found")
         
-    diag = diagnose_mistake(dict(q), selected_answer, time_taken_seconds)
+    diag = diagnose_mistake(dict(q), selected_answer, time_taken_seconds, user_id=current_user["id"])
     return diag
 
 if __name__ == "__main__":

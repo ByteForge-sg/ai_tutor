@@ -1,14 +1,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import {
   BotMessageSquare,
   X,
   Send,
   Sparkles,
   ShieldAlert,
-  HelpCircle,
-  Lightbulb,
   ArrowRight
 } from "lucide-react";
 import { sendAIChatMessage } from "@/lib/api";
@@ -17,6 +16,7 @@ interface Message {
   role: "user" | "assistant" | "system";
   content: string;
   isExamBlocked?: boolean;
+  isError?: boolean;
 }
 
 interface AICoachDrawerProps {
@@ -32,6 +32,9 @@ export default function AICoachDrawer({
   activeExamId = null,
   onNavigateToWeakness,
 }: AICoachDrawerProps) {
+  const pathname = usePathname();
+  const routeAttemptId = pathname.match(/^\/exam\/([^/]+)\/?$/)?.[1];
+  const currentExamId = routeAttemptId === activeExamId ? activeExamId : null;
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
@@ -51,7 +54,7 @@ export default function AICoachDrawer({
 
   const handleSend = async (textToSend?: string) => {
     const text = textToSend || inputText;
-    if (!text.trim() || isLoading) return;
+    if (!text.trim() || isLoading || currentExamId) return;
 
     const userMsg: Message = { role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
@@ -60,9 +63,9 @@ export default function AICoachDrawer({
 
     try {
       const response = await sendAIChatMessage({
-        user_id: "user_demo",
         message: text,
-        current_attempt_id: activeExamId || undefined,
+        current_attempt_id: currentExamId || undefined,
+        context: { page: pathname.split("/")[1] || "dashboard", pathname },
       });
 
       if (response.mode === "EXAM_BLOCKED") {
@@ -83,13 +86,16 @@ export default function AICoachDrawer({
           },
         ]);
       }
-    } catch {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message.trim() : "";
       setMessages((prev) => [
         ...prev,
         {
-          role: "assistant",
-          content:
-            "WHY analysis is temporarily unavailable. Your question and attempt records remain safely saved.",
+          role: "system",
+          content: detail
+            ? `AI Coach error: ${detail}`
+            : "AI Coach could not reach the server. Check your connection and try again.",
+          isError: true,
         },
       ]);
     } finally {
@@ -131,7 +137,7 @@ export default function AICoachDrawer({
       </div>
 
       {/* Live Exam Mode Alert Banner (if exam is running) */}
-      {activeExamId && (
+      {currentExamId && (
         <div className="p-3 bg-rose-950/40 border-b border-rose-500/30 flex items-start gap-2.5 text-[12px] text-rose-300">
           <ShieldAlert size={16} className="text-rose-400 shrink-0 mt-0.5" />
           <div>
@@ -154,6 +160,8 @@ export default function AICoachDrawer({
                 className={`max-w-[88%] rounded-[12px] p-3.5 text-[13px] leading-relaxed whitespace-pre-line shadow-md ${
                   isUser
                     ? "bg-gradient-to-r from-[#7C3AED] to-[#9333EA] text-white shadow-purple-500/20"
+                    : m.isError
+                    ? "bg-amber-950/40 border border-amber-500/30 text-amber-200"
                     : m.isExamBlocked
                     ? "bg-rose-950/40 border border-rose-500/30 text-rose-300"
                     : "bg-white/5 border border-white/10 text-slate-200"
@@ -200,6 +208,7 @@ export default function AICoachDrawer({
               <button
                 key={idx}
                 onClick={() => handleSend(p)}
+                disabled={isLoading || Boolean(currentExamId)}
                 className="w-full text-left text-[12px] text-slate-300 hover:text-white p-2 rounded-[8px] bg-white/5 hover:bg-white/10 border border-white/5 hover:border-purple-500/30 transition-all truncate block"
               >
                 • {p}
@@ -223,16 +232,16 @@ export default function AICoachDrawer({
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             placeholder={
-              activeExamId
+              currentExamId
                 ? "Locked during active exam..."
                 : "Ask WHY you missed a question..."
             }
-            disabled={isLoading || Boolean(activeExamId)}
+            disabled={isLoading || Boolean(currentExamId)}
             className="flex-1 text-[13px] px-3.5 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 disabled:opacity-40"
           />
           <button
             type="submit"
-            disabled={!inputText.trim() || isLoading || Boolean(activeExamId)}
+            disabled={!inputText.trim() || isLoading || Boolean(currentExamId)}
             className="why-btn-gradient p-2.5 rounded-[10px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send size={16} />

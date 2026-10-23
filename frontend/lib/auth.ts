@@ -1,52 +1,55 @@
-import { User, ExamType } from "@/types";
+import { User } from "@/types";
 
 const AUTH_STORAGE_KEY = "why_auth_user";
+const AUTH_TOKEN_KEY = "why_auth_token";
 
-export const DEFAULT_USER: User = {
-  id: "user_demo",
-  email: "aditya.sharma@jee2026.in",
-  name: "Aditya Sharma",
-  target_exam: "JEE",
-  avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
-  created_at: "2026-05-01T08:00:00Z"
-};
+/** Returns the signed-in user, or null when nobody is signed in. */
+export function getCurrentUser(): User | null {
+  if (typeof window === "undefined") return null;
 
-export function getCurrentUser(): User {
-  if (typeof window === "undefined") return DEFAULT_USER;
   try {
     const stored = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (stored) {
-      return JSON.parse(stored);
+    const token = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!stored || !token) {
+      if (!token) localStorage.removeItem(AUTH_STORAGE_KEY);
+      return null;
     }
-  } catch (e) {
-    console.error(e);
+    return JSON.parse(stored) as User;
+  } catch (error) {
+    console.error("Could not read the saved user:", error);
+    return null;
   }
-  return DEFAULT_USER;
 }
 
+export function getAuthToken(): string | null {
+  if (typeof window === "undefined") return null;
+
+  try {
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  } catch (error) {
+    console.error("Could not read the saved authentication token:", error);
+    return null;
+  }
+}
+
+/** Save the server-issued token and user after successful signup/signin. */
+export function setAuthenticatedSession(user: User, accessToken: string): void {
+  if (typeof window === "undefined") return;
+
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
+  localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+}
+
+/** Update user details without changing the existing token. */
 export function setCurrentUser(user: User): void {
   if (typeof window === "undefined") return;
-  try {
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
-  } catch (e) {
-    console.error(e);
-  }
-}
 
-export function loginWithGoogle(email: string, name?: string, exam: ExamType = "JEE"): User {
-  const user: User = {
-    id: `user-${email.split("@")[0]}`,
-    email: email,
-    name: name || email.split("@")[0].replace(/[._]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
-    target_exam: exam,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=256&q=80",
-    created_at: new Date().toISOString()
-  };
-  setCurrentUser(user);
-  return user;
+  localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(user));
 }
 
 export function logout(): void {
   if (typeof window === "undefined") return;
+
   localStorage.removeItem(AUTH_STORAGE_KEY);
+  localStorage.removeItem(AUTH_TOKEN_KEY);
 }
