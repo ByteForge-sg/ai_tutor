@@ -1,0 +1,154 @@
+# NCERT Class 11 Physics (Part 1)
+# Chapter 2: Units and Measurements
+
+## 2.1 Introduction and Need for Measurement
+Measurement of any physical quantity involves comparison with a certain basic, arbitrarily chosen, internationally accepted reference standard called unit. The result of a measurement of a physical quantity is expressed by a number accompanied by a unit. Although the number of physical quantities appears to be very large, we need only a limited number of units for expressing all the physical quantities, since they are inter-related with one another. The units for the fundamental or base quantities are called fundamental or base units. The units of all other physical quantities can be expressed as combinations of the base units. Such units obtained for the derived quantities are called derived units. A complete set of these units, both the base units and derived units, is known as the system of units.
+
+## 2.2 The International System of Units (SI)
+In earlier time scientists of different countries were using different systems of units for measurement. Three such systems, the CGS, the FPS (or British) system and the MKS system were in use extensively till recently. In 1971, the General Conference on Weights and Measures developed the Système International d'Unités (French for International System of Units), abbreviated as SI. 
+
+The SI system is based on seven base units:
+1. Length: metre (symbol: m). The metre is the length of the path travelled by light in vacuum during a time interval of 1/299,792,458 of a second.
+2. Mass: kilogram (symbol: kg). The kilogram is defined by taking the fixed numerical value of the Planck constant h to be 6.62607015 x 10^-34 when expressed in the unit J s.
+3. Time: second (symbol: s). The second is defined by taking the fixed numerical value of the caesium frequency Δν_Cs, the unperturbed ground-state hyperfine transition frequency of the caesium-133 atom, to be 9,192,631,770 when expressed in the unit Hz.
+4. Electric current: ampere (symbol: A). The ampere is defined by taking the fixed numerical value of the elementary charge e to be 1.602176634 x 10^-19 when expressed in the unit C.
+5. Thermodynamic temperature: kelvin (symbol: K). The kelvin is defined by taking the fixed numerical value of the Boltzmann constant k to be 1.380649 x 10^-23 when expressed in J K^-1.
+6. Amount of substance: mole (symbol: mol). One mole contains exactly 6.02214076 x 10^23 elementary entities (Avogadro number).
+7. Luminous intensity: candela (symbol: cd). The candela is the luminous intensity, in a given direction, of a source that emits monochromatic radiation of frequency 540 x 10^12 Hz.
+
+Besides the seven base units, there are two supplementary units: plane angle dθ as the ratio of length of arc ds to the radius r, with unit radian (rad); and solid angle dΩ as the ratio of the intercepted area dA to the square of the radius r, with unit steradian (sr). Both of these are dimensionless physical quantities.
+
+## 2.3 Measurement of Length and Parallax Method
+Direct methods for measuring length include a metre scale for distances from 10^-3 m to 10^2 m, a vernier callipers with an accuracy of 10^-4 m, and a screw gauge or spherometer to measure lengths down to 10^-5 m.
+
+Large distances such as the distance of a planet or a star from the earth cannot be measured directly with a metre scale. An important method in such cases is the parallax method. When you hold a pencil in front of you against some background and look at it first with your left eye A and then with your right eye B, you will notice that the position of the pencil seems to change with respect to the background. This is called parallax. The distance between the two points of observation is called the basis. In this example, the basis is the distance between the eyes.
+
+To measure the distance D of a far away planet S by the parallax method, we observe it from two different observatories A and B on the Earth, separated by distance AB = b at the same time. We measure the angle between the two directions along which the planet is viewed at these two points. The angle ∠ASB is represented by the symbol θ and is called the parallax angle or parallactic angle. Since the planet is very distant, b/D << 1, and therefore θ is very small. Then we consider AB as an arc of length b of a circle with centre at S and radius D = AS = BS so that AB = b = D θ where θ is in radians. Thus, D = b / θ.
+
+For estimating very small sizes, such as the size of a molecule (10^-8 m to 10^-10 m), simple optical microscopes cannot be used because light has wave-like properties and its resolution limit is of the order of the wavelength of visible light (~4000 Å to 7000 Å). Instead, electron beams or tunneling microscopy are employed. The size of an oleic acid molecule can be estimated by forming a monomolecular thin film on water surface using lycopodium powder.
+
+## 2.4 Measurement of Mass and Time
+Mass is a basic property of matter. It does not depend on the temperature, pressure or location of the object in space. The SI unit of mass is kilogram (kg). While dealing with atoms and molecules, the kilogram is an inconveniently large unit. In this case, there is an important standard unit of mass, called the unified atomic mass unit (u), which has been established for expressing the mass of atoms: 1 unified atomic mass unit = 1 u = (1/12) of the mass of an atom of carbon-12 isotope (12C) including the mass of electrons = 1.66 x 10^-27 kg. Common masses are measured by a common balance, while tiny atomic masses are measured by a mass spectrograph.
+
+To measure any time interval we need a clock. We now use an atomic standard of time, which is based on the periodic vibrations produced in a caesium atom. This is the basis of the caesium clock, sometimes called atomic clock, used in the national standards. In the caesium atomic clock, the second is taken as the time needed for 9,192,631,770 vibrations of the radiation corresponding to the transition between the two hyperfine levels of the ground state of caesium-133 atom. The caesium clocks are very accurate, providing an uncertainty of about 1 part in 10^13, which means that a caesium clock loses or gains no more than 3 microseconds in one year.
+
+## 2.5 Accuracy, Precision of Instruments and Errors in Measurement
+Every measurement by any measuring instrument contains some uncertainty. This uncertainty is called error. Every calculated result also involves errors. We distinguish between two terms: accuracy and precision.
+
+The accuracy of a measurement is a measure of how close the measured value is to the true value of the quantity. Precision tells us to what resolution or limit the quantity is measured. For example, suppose the true value of a certain length is 3.678 cm. In one experiment, using a measuring instrument of resolution 0.1 cm, the measurement is found to be 3.5 cm. In another experiment, using a measuring device of greater resolution, say 0.01 cm, the length is determined to be 3.38 cm. The first measurement has more accuracy (because it is closer to the true value 3.678 cm) but less precision (its resolution is only 0.1 cm), whereas the second measurement is less accurate but more precise.
+
+In general, the errors in measurement can be broadly classified into two categories:
+1. Systematic Errors: Systematic errors are those errors that tend to be in one direction, either positive or negative. Sources of systematic errors include:
+   a. Instrumental errors: arise from imperfect design, zero error of the instrument, or improper calibration (e.g. zero mark of vernier scale not coinciding with zero mark of main scale).
+   b. Imperfection in experimental technique or procedure: e.g. determining body temperature with a thermometer under armpit reading lower than actual temperature; external conditions like temperature, pressure, humidity.
+   c. Personal errors: arise due to an individual's bias, lack of proper setting of apparatus, or carelessness in taking observations (e.g. parallax error while reading a scale). Systematic errors can be minimized by improving experimental techniques, selecting better instruments, and eliminating personal bias.
+
+2. Random Errors: The random errors are those errors which occur irregularly and at random in magnitude and direction. These can arise due to random and unpredictable fluctuations in experimental conditions (e.g. unpredictable temperature fluctuations, voltage fluctuations, mechanical vibrations). Random errors can be minimized by repeating the observations a large number of times and taking the arithmetic mean of all the observations.
+
+Least Count Error: The smallest value that can be measured by the measuring instrument is called its least count. All readings or measured values are good only up to this value. The least count error is the error associated with the resolution of the instrument. For example, a vernier callipers has a least count of 0.01 cm, and a spherometer may have a least count of 0.001 cm. Using instruments of higher precision and improving experimental techniques can reduce the least count error.
+
+## 2.5.1 Absolute Error, Relative Error and Percentage Error
+Suppose the values obtained in several measurements of a physical quantity are a1, a2, a3, ..., an. The best representative value is the arithmetic mean:
+a_mean = (a1 + a2 + ... + an) / n = (1/n) Σ ai.
+
+The magnitude of the difference between the individual measurement value and the true value (represented by the arithmetic mean) is called the absolute error of the measurement. It is denoted by |Δa|:
+|Δa1| = |a1 - a_mean|
+|Δa2| = |a2 - a_mean|
+...
+|Δan| = |an - a_mean|
+The absolute error |Δa| is always positive.
+
+The arithmetic mean of all the absolute errors is taken as the mean absolute error Δa_mean:
+Δa_mean = (|Δa1| + |Δa2| + ... + |Δan|) / n = (1/n) Σ |Δai|.
+The value of the physical quantity is written as: a = a_mean ± Δa_mean.
+
+The relative error is the ratio of the mean absolute error Δa_mean to the mean value a_mean of the quantity measured:
+Relative error = Δa_mean / a_mean.
+When the relative error is expressed in per cent, it is called the percentage error (δa):
+Percentage error = (Δa_mean / a_mean) x 100%.
+
+## 2.5.2 Combination of Errors in Arithmetic Operations
+When we perform mathematical operations on measured quantities, errors propagate according to specific rules:
+
+1. Error of a sum or a difference:
+When two quantities are added or subtracted, the absolute error in the final result is the sum of the absolute errors in the individual quantities.
+If Z = A + B or Z = A - B, then the maximum possible error in Z is:
+ΔZ = ΔA + ΔB.
+
+2. Error of a product or a quotient:
+When two quantities are multiplied or divided, the fractional or relative error in the result is the sum of the fractional errors in the multipliers.
+If Z = A * B or Z = A / B, then:
+ΔZ / Z = (ΔA / A) + (ΔB / B).
+
+3. Error in case of a quantity raised to a power:
+The relative error in a physical quantity raised to the power p is the power p times the relative error in the individual quantity.
+If Z = A^p, then:
+ΔZ / Z = p * (ΔA / A).
+In general, if Z = (A^p * B^q) / C^r, then the maximum relative error is:
+ΔZ / Z = p * (ΔA / A) + q * (ΔB / B) + r * (ΔC / C).
+
+## 2.6 Significant Figures and Rules for Determination
+Normally, the reported result of measurement is a number that includes all digits in the number that are known reliably plus the first digit that is uncertain. The reliable digits plus the first uncertain digit are known as significant digits or significant figures. If we say the period of oscillation of a simple pendulum is 1.62 s, the digits 1 and 6 are reliable and certain, while the digit 2 is uncertain. The measurement has three significant figures.
+
+Rules for Determining the Number of Significant Figures:
+1. All the non-zero digits are significant. For example, 245.8 has four significant figures.
+2. All the zeros between two non-zero digits are significant, no matter where the decimal point is, if at all. For example, 2005 has four significant figures, and 2.0005 has five significant figures.
+3. If the number is less than 1, the zero(s) on the right of decimal point but to the left of the first non-zero digit are not significant. For example, in 0.002308, the underlined zeros are not significant; this number has four significant figures (2, 3, 0, 8).
+4. The terminal or trailing zero(s) in a number without a decimal point are not significant. For example, 123 m = 12300 cm = 123000 mm has three significant figures. The trailing zeros are not significant.
+5. The trailing zero(s) in a number with a decimal point are significant. For example, 3.500 m and 0.06900 m each have four significant figures.
+6. A change of units does not change the number of significant digits in a measurement. To avoid confusion regarding trailing zeros, the best way is to report every measurement in scientific notation: a x 10^b, where a is a number between 1 and 10 and b is an exponent. The power of 10 is irrelevant to the determination of significant figures. For example, 4.700 x 10^2 m has four significant figures.
+
+## 2.6.1 Rules for Rounding Off Insignificant Digits
+When rounding off numbers, the following rules apply:
+1. The preceding digit is raised by 1 if the insignificant digit to be dropped is more than 5, and is left unchanged if the latter is less than 5. For example, 2.746 rounded off to three significant figures is 2.75, while 2.743 rounded off to three significant figures is 2.74.
+2. If the insignificant digit to be dropped is 5:
+   a. If the preceding digit is even, the insignificant digit is simply dropped (preceding digit is left unchanged). For example, 2.745 rounded off to three significant figures becomes 2.74 because 4 is even.
+   b. If the preceding digit is odd, the preceding digit is raised by 1. For example, 2.735 rounded off to three significant figures becomes 2.74 because 3 is odd.
+
+Rules for Arithmetic Operations with Significant Figures:
+1. In multiplication or division, the final result should retain as many significant figures as there are in the original number with the least significant figures. For example, if density = mass / volume, with mass = 4.237 g (4 significant figures) and volume = 2.51 cm^3 (3 significant figures), density should be rounded off to 3 significant figures: 1.69 g/cm^3.
+2. In addition or subtraction, the final result should retain as many decimal places as are there in the number with the least decimal places. For example, the sum of 436.32 g, 227.2 g and 0.301 g is 663.821 g. Since 227.2 g has only one decimal place, the result must be rounded off to 663.8 g.
+
+## 2.7 Dimensions of Physical Quantities
+All the physical quantities can be expressed in terms of the seven fundamental quantities. The nature of a physical quantity is described by its dimensions. All the physical quantities represented by derived units can be expressed in terms of some combination of seven fundamental or base quantities. We call these dimensions of the base quantities:
+- Length: [L]
+- Mass: [M]
+- Time: [T]
+- Electric Current: [A]
+- Thermodynamic Temperature: [K]
+- Luminous Intensity: [cd]
+- Amount of Substance: [mol]
+
+The dimensions of a physical quantity are the powers (or exponents) to which the base quantities are raised to represent that quantity.
+For example, Volume = length x breadth x height = [L] x [L] x [L] = [L^3] = [M^0 L^3 T^0].
+Force = mass x acceleration = [M] x [L T^-2] = [M L T^-2].
+Work / Energy = Force x displacement = [M L T^-2] x [L] = [M L^2 T^-2].
+Power = Work / time = [M L^2 T^-3].
+Pressure = Force / Area = [M L T^-2] / [L^2] = [M L^-1 T^-2].
+
+The expression which shows how and which of the base quantities represent the dimensions of a physical quantity is called the dimensional formula of the given physical quantity. An equation obtained by equating a physical quantity with its dimensional formula is called the dimensional equation.
+
+## 2.8 Dimensional Analysis and Its Applications
+The principle of homogeneity of dimensions states that a physical equation is correct only if the dimensions of each and every term on both sides of the equation are the same. In physical equations, only quantities of the same dimensions can be added or subtracted.
+
+Applications of Dimensional Analysis:
+1. Checking the dimensional consistency of equations:
+For any physical relation to be valid, the dimensions of the terms on the left-hand side must equal the dimensions of each term on the right-hand side. For example, in the kinematic equation s = u t + (1/2) a t^2:
+LHS: [s] = [L].
+RHS term 1: [u t] = [L T^-1] x [T] = [L].
+RHS term 2: [(1/2) a t^2] = [L T^-2] x [T^2] = [L] (since 1/2 is a dimensionless constant).
+Since every term has the dimension of [L], the equation is dimensionally consistent.
+
+2. Deducing relations among physical quantities:
+Dimensional analysis can be used to deduce expressions relating physical variables if the dependent factors are known. For example, for the time period T of a simple pendulum depending on mass of bob m, length of pendulum l, and acceleration due to gravity g:
+T = k * m^x * l^y * g^z.
+Equating dimensions on both sides:
+[M^0 L^0 T^1] = [M]^x * [L]^y * [L T^-2]^z = [M^x L^(y+z) T^(-2z)].
+Equating exponents: x = 0, y + z = 0, -2z = 1 => z = -1/2, y = 1/2.
+Therefore, T = k * l^(1/2) * g^(-1/2) = k * √(l / g). The dimensionless constant k is determined experimentally to be 2π, giving T = 2π √(l/g).
+
+Limitations of Dimensional Analysis:
+1. It does not provide information about the dimensionless constant of proportionality k.
+2. It cannot derive equations involving trigonometric, exponential, or logarithmic functions.
+3. It cannot derive formulas if a physical quantity depends on more than three quantities in mechanics (having only M, L, T).
+4. A dimensionally correct equation need not be physically correct (e.g. s = 2 u t + a t^2 is dimensionally correct but physically wrong).
