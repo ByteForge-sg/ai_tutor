@@ -17,8 +17,8 @@ The entire platform runs through a unified localhost link:
 $$\mathbf{http://localhost:3000}$$
 
 * **Frontend**: Next.js 16 (App Router + Turbopack), React 19, TypeScript, Vanilla Tailwind CSS, Lucide icons, Recharts.
-* **Backend**: FastAPI, Python 3.13, SQLite with WAL (Write-Ahead Logging) mode, Uvicorn on port `8008`.
-* **Zero-CORS Proxy**: Next.js automatically rewrites `/api/*` to `http://localhost:8008/*`, allowing end-to-end functionality through port 3000.
+* **Backend**: FastAPI, Python 3.13, SQLite with WAL (Write-Ahead Logging) mode, Uvicorn on port `8080`.
+* **Zero-CORS Proxy**: Next.js automatically rewrites `/api/*` to `http://localhost:8080/*`, allowing end-to-end functionality through port 3000.
 
 ---
 
@@ -75,11 +75,11 @@ $$\mathbf{http://localhost:3000}$$
 
 ## 🏃 Quick Start Guide
 
-### 1. Start Backend (Port 8008)
+### 1. Start Backend (Port 8080)
 ```bash
 cd backend
 source ../venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload --reload-dir app
+uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload --reload-dir app
 ```
 
 ### 2. Start Frontend (Port 3000)

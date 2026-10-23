@@ -29,6 +29,8 @@ backend/app/__pycache__/
 *.db-shm
 why_mistake_coach.db
 backend/why_mistake_coach.db
+qdrant_storage/
+backend/data/qdrant_storage/
 
 # Environment Variables
 .env
