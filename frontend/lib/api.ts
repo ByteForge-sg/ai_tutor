@@ -112,6 +112,18 @@ export async function fetchCurrentUser(): Promise<User> {
   return res.json();
 }
 
+export async function changePassword(payload: {
+  current_password: string;
+  new_password: string;
+}): Promise<{ message: string }> {
+  const res = await apiFetch("/users/me/password", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  await ensureOk(res, "Failed to change your password");
+  return res.json();
+}
+
 // The user ID arguments remain optional for compatibility with existing screens.
 // The backend identifies the user from the JWT, not from a client-supplied ID.
 export async function fetchDashboard(_userId?: string, exam: ExamType = "JEE"): Promise<DashboardData> {

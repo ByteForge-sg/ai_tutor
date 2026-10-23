@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -20,20 +20,14 @@ import {
   Layers,
   FileCheck2,
   ShieldCheck,
-  TrendingUp,
-  UserCheck
+  TrendingUp
 } from "lucide-react";
-import { getCurrentUser } from "@/lib/auth";
-import { User } from "@/types";
+import { getAuthToken } from "@/lib/auth";
+import { fetchCurrentUser } from "@/lib/api";
 
 export default function LandingPage() {
   const router = useRouter();
   const [activeStep, setActiveStep] = useState(2);
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    setUser(getCurrentUser());
-  }, []);
 
   const loopSteps = [
     { title: "Question", subtitle: "Curated JEE / NEET", desc: "Solve realistic exam questions with countdown timer." },
@@ -44,7 +38,19 @@ export default function LandingPage() {
     { title: "Improvement", subtitle: "Measurable Gain", desc: "Real recalculated before vs after accuracy verified by data." },
   ];
 
-  const goToLogin = () => router.push("/login");
+  const navigateWithSession = async (destination: string) => {
+    if (!getAuthToken()) {
+      router.push("/login");
+      return;
+    }
+
+    try {
+      await fetchCurrentUser();
+      router.push(destination);
+    } catch {
+      router.replace("/login");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-[#07050E] text-white flex flex-col relative overflow-hidden">
@@ -63,36 +69,10 @@ export default function LandingPage() {
           </span>
         </div>
 
-        <div className="hidden md:flex items-center gap-6 text-[13px] font-medium text-slate-400">
-          <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
-          <Link href="/practice" className="hover:text-white transition-colors">Practice</Link>
-          <Link href="/tests" className="hover:text-white transition-colors">Tests</Link>
-          <Link href="/pyqs" className="hover:text-white transition-colors">PYQs</Link>
-          <Link href="/weaknesses" className="hover:text-white transition-colors">Weaknesses</Link>
-          <Link href="/progress" className="hover:text-white transition-colors">Progress</Link>
-        </div>
-
         <div className="flex items-center gap-3">
-          {user ? (
-            <div className="flex items-center gap-2.5">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-[12px] font-bold text-white">{user.name}</span>
-                <span className="text-[10px] text-purple-400 font-mono-numbers">{user.target_exam} Target</span>
-              </div>
-              <Link href="/dashboard" className="why-btn-gradient px-4 py-2 text-[13px] flex items-center gap-1.5">
-                <span>Open Dashboard</span><ArrowRight size={14} />
-              </Link>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/login" className="px-3.5 py-1.5 rounded-[10px] border border-white/10 hover:border-purple-500/40 text-slate-300 hover:text-white text-[13px] font-medium transition-all">
-                Sign In
-              </Link>
-              <Link href="/login" className="why-btn-gradient px-4 py-2 text-[13px] flex items-center gap-1.5">
-                <Sparkles size={14} /><span>Get Started</span>
-              </Link>
-            </div>
-          )}
+          <Link href="/login" className="px-4 py-2 rounded-[10px] bg-white text-slate-900 hover:bg-slate-100 text-[13px] font-semibold transition-all whitespace-nowrap">
+            Sign In / Sign Up
+          </Link>
         </div>
       </header>
 
@@ -120,15 +100,12 @@ export default function LandingPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
-            <Link href={user ? "/dashboard" : "/login"} className="why-btn-gradient px-6 py-3 text-[15px] font-semibold flex items-center gap-2 w-full sm:w-auto justify-center shadow-lg shadow-purple-500/30">
-              <Zap size={16} /><span>{user ? "Launch AI Dashboard" : "Get Started"}</span><ArrowRight size={16} />
-            </Link>
-            <Link href="/practice" className="px-6 py-3 rounded-[12px] bg-white/5 border border-white/10 hover:border-purple-500/40 hover:bg-white/10 text-white text-[15px] font-semibold flex items-center gap-2 w-full sm:w-auto justify-center transition-all">
+            <button type="button" onClick={() => navigateWithSession("/dashboard")} className="why-btn-gradient px-6 py-3 text-[15px] font-semibold flex items-center gap-2 w-full sm:w-auto justify-center shadow-lg shadow-purple-500/30">
+              <Zap size={16} /><span>Launch AI Dashboard</span><ArrowRight size={16} />
+            </button>
+            <button type="button" onClick={() => navigateWithSession("/practice")} className="px-6 py-3 rounded-[12px] bg-white/5 border border-white/10 hover:border-purple-500/40 hover:bg-white/10 text-white text-[15px] font-semibold flex items-center gap-2 w-full sm:w-auto justify-center transition-all">
               <GraduationCap size={16} className="text-[#38BDF8]" /><span>Explore Practice</span>
-            </Link>
-            <Link href="/login" className="px-6 py-3 rounded-[12px] bg-white text-slate-900 hover:bg-slate-100 text-[15px] font-semibold flex items-center gap-2 w-full sm:w-auto justify-center transition-all">
-              <UserCheck size={16} /><span>Sign In / Sign Up</span>
-            </Link>
+            </button>
           </div>
 
           <div className="flex items-center justify-center gap-2 pt-2 text-[12px] text-slate-400">
@@ -230,12 +207,6 @@ export default function LandingPage() {
       <footer className="border-t border-white/10 py-6 px-6 lg:px-12 text-center text-[12px] text-slate-500 z-10 backdrop-blur-md bg-[#07050E]/80">
         <div className="flex flex-col sm:flex-row items-center justify-between max-w-6xl mx-auto gap-2">
           <span>WHY — AI Mistake Coach • Built for JEE & NEET</span>
-          <div className="flex items-center gap-4 text-slate-400">
-            <Link href="/login" className="hover:text-white transition-colors">Sign In</Link>
-            <Link href="/dashboard" className="hover:text-white transition-colors">Dashboard</Link>
-            <Link href="/practice" className="hover:text-white transition-colors">Practice</Link>
-            <Link href="/tests" className="hover:text-white transition-colors">Tests</Link>
-          </div>
         </div>
       </footer>
     </div>

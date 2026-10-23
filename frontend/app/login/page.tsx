@@ -6,22 +6,24 @@ import { signup, signin } from "@/lib/api";
 import { Sparkles, ArrowRight, ShieldCheck, Mail, Lock, UserRound } from "lucide-react";
 import Link from "next/link";
 
-type Exam = "JEE" | "NEET";
 type AuthMode = "signin" | "signup";
+type AccountType = "student" | "teacher";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("signin");
+  const [accountType, setAccountType] = useState<AccountType>("student");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [selectedExam, setSelectedExam] = useState<Exam>("JEE");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+
+    if (accountType === "teacher") return;
 
     if (mode === "signup" && !name.trim()) {
       setError("Enter your name.");
@@ -43,12 +45,12 @@ export default function LoginPage() {
           name: name.trim(),
           email: email.trim(),
           password,
-          target_exam: selectedExam,
+          target_exam: "JEE",
         });
       } else {
         await signin({ email: email.trim(), password });
       }
-      router.replace("/dashboard");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
     } finally {
@@ -89,7 +91,7 @@ export default function LoginPage() {
             </h2>
             <p className="text-[13px] text-slate-400">
               {mode === "signin"
-                ? "Sign in to continue your personalised JEE/NEET preparation."
+                ? "Sign in to continue your personalised preparation."
                 : "Create an account to save your progress and mistake profile."}
             </p>
           </div>
@@ -97,98 +99,106 @@ export default function LoginPage() {
           <div className="mb-6 p-1 rounded-full bg-white/5 border border-white/10 flex items-center">
             <button
               type="button"
-              onClick={() => { setSelectedExam("JEE"); setError(""); }}
+              onClick={() => { setAccountType("student"); setError(""); }}
               className={`flex-1 py-1.5 rounded-full text-[13px] font-semibold transition-all ${
-                selectedExam === "JEE"
+                accountType === "student"
                   ? "bg-gradient-to-r from-[#7C3AED] to-[#9333EA] text-white shadow-lg shadow-purple-500/40"
                   : "text-slate-400 hover:text-white"
               }`}
+              aria-pressed={accountType === "student"}
             >
-              JEE (Main &amp; Adv)
+              Student
             </button>
             <button
               type="button"
-              onClick={() => { setSelectedExam("NEET"); setError(""); }}
+              onClick={() => { setAccountType("teacher"); setError(""); }}
               className={`flex-1 py-1.5 rounded-full text-[13px] font-semibold transition-all ${
-                selectedExam === "NEET"
+                accountType === "teacher"
                   ? "bg-gradient-to-r from-[#7C3AED] to-[#9333EA] text-white shadow-lg shadow-purple-500/40"
                   : "text-slate-400 hover:text-white"
               }`}
+              aria-pressed={accountType === "teacher"}
             >
-              NEET (UG Medical)
+              Teacher
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {mode === "signup" && (
+          {accountType === "teacher" ? (
+            <p role="status" className="rounded-[10px] border border-purple-500/30 bg-purple-500/10 px-4 py-5 text-center text-[13px] text-purple-200">
+              Teacher access is coming soon.
+            </p>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {mode === "signup" && (
+                <div className="relative">
+                  <UserRound size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    placeholder="Full name"
+                    autoComplete="name"
+                    maxLength={100}
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                  />
+                </div>
+              )}
+
               <div className="relative">
-                <UserRound size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                <Mail size={16} className="absolute left-3.5 top-3 text-slate-400" />
                 <input
-                  type="text"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Full name"
-                  autoComplete="name"
-                  maxLength={100}
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="Email address"
+                  autoComplete="email"
                   required
                   className="w-full pl-10 pr-4 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                 />
               </div>
-            )}
 
-            <div className="relative">
-              <Mail size={16} className="absolute left-3.5 top-3 text-slate-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                placeholder="Email address"
-                autoComplete="email"
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-              />
-            </div>
-
-            <div className="relative">
-              <Lock size={16} className="absolute left-3.5 top-3 text-slate-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                placeholder="Password"
-                autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                minLength={mode === "signup" ? 8 : 1}
-                maxLength={128}
-                required
-                className="w-full pl-10 pr-4 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-              />
-            </div>
-
-            {mode === "signup" && (
-              <p className="text-[11px] text-slate-500">Use at least 8 characters for your password.</p>
-            )}
-
-            {error && (
-              <div role="alert" className="rounded-[10px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">
-                {error}
+              <div className="relative">
+                <Lock size={16} className="absolute left-3.5 top-3 text-slate-400" />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder="Password"
+                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  minLength={mode === "signup" ? 8 : 1}
+                  maxLength={128}
+                  required
+                  className="w-full pl-10 pr-4 py-2.5 rounded-[10px] bg-white/5 border border-white/10 text-[13px] text-white placeholder-slate-500 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                />
               </div>
-            )}
 
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="why-btn-gradient w-full py-3 text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <span>
-                {isSubmitting
-                  ? "Please wait..."
-                  : mode === "signin"
-                    ? "Sign In"
-                    : "Create Account"}
-              </span>
-              {!isSubmitting && <ArrowRight size={14} />}
-            </button>
-          </form>
+              {mode === "signup" && (
+                <p className="text-[11px] text-slate-500">Use at least 8 characters for your password.</p>
+              )}
+
+              {error && (
+                <div role="alert" className="rounded-[10px] border border-red-500/30 bg-red-500/10 px-3 py-2 text-[12px] text-red-300">
+                  {error}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="why-btn-gradient w-full py-3 text-[13px] font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                <span>
+                  {isSubmitting
+                    ? "Please wait..."
+                    : mode === "signin"
+                      ? "Sign In"
+                      : "Create Account"}
+                </span>
+                {!isSubmitting && <ArrowRight size={14} />}
+              </button>
+            </form>
+          )}
 
           <div className="mt-5 text-center text-[12px] text-slate-400">
             {mode === "signin" ? "New to WHY? " : "Already have an account? "}

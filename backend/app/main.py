@@ -16,7 +16,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.database import init_db, get_db_connection
 from app.seed_data import seed_database
 from app.models import (
-    UserSignupRequest, UserLoginRequest, UserResponse, AuthResponse,
+    UserSignupRequest, UserLoginRequest, PasswordChangeRequest, UserResponse, AuthResponse,
     ExamUpdateRequest, QuestionOut, QuestionDetail,
     TestListItem, StartTestRequest, TestAttemptOut, SaveAnswerRequest,
     IntegrityEventRequest, SubmitTestRequest, TestResultOut,
@@ -242,6 +242,49 @@ def login(req: UserLoginRequest):
 @app.get("/users/me", response_model=UserResponse)
 def get_my_profile(current_user: dict = Depends(get_current_user)):
     return current_user
+
+
+@app.patch("/users/me/password")
+def change_my_password(
+    req: PasswordChangeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    conn = get_db_connection()
+    try:
+        user = conn.execute(
+            "SELECT password_hash FROM users WHERE id = ?",
+            (current_user["id"],),
+        ).fetchone()
+        if not user or not user["password_hash"]:
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        try:
+            valid_password = password_hash.verify(
+                req.current_password, user["password_hash"]
+            )
+        except Exception:
+            valid_password = False
+        if not valid_password:
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+        updated = conn.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ? AND password_hash = ?",
+            (
+                password_hash.hash(req.new_password),
+                current_user["id"],
+                user["password_hash"],
+            ),
+        )
+        if updated.rowcount != 1:
+            conn.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Password changed in another request. Please try again.",
+            )
+        conn.commit()
+        return {"message": "Password updated successfully"}
+    finally:
+        conn.close()
 
 
 @app.patch("/users/me/exam", response_model=UserResponse)
