@@ -255,3 +255,48 @@ export interface InterventionResult {
   correct_count: number;
   message: string;
 }
+
+export interface NCERTSourceChunk {
+  chunk_id: string;
+  chapter_id?: string;
+  chapter?: string;
+  subject?: string;
+  section: string;
+  source?: string;
+  text: string;
+  similarity: number;
+}
+
+export interface NCERTChapter {
+  id: string;
+  subject: string;
+  chapter: string;
+  class_level: string;
+  source: string;
+  is_indexed: boolean;
+  chunk_count: number;
+  suggested_questions: string[];
+}
+
+export interface NCERTChatResponse {
+  answer: string;
+  chapter: string;
+  subject: string;
+  sources: NCERTSourceChunk[];
+  retrieved_sections: string[];
+  is_out_of_scope: boolean;
+  generation_unavailable?: boolean;
+}
+
+export interface NCERTChatMessage {
+  id: string;
+  role: "user" | "bot";
+  content: string;
+  timestamp: string;
+  sources?: NCERTSourceChunk[];
+  retrieved_sections?: string[];
+  is_out_of_scope?: boolean;
+  chapter?: string;
+  subject?: string;
+}
+

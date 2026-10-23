@@ -10,6 +10,8 @@ import {
   InterventionResult,
   ExamType,
   User,
+  NCERTChapter,
+  NCERTChatResponse,
 } from "@/types";
 
 const API_BASE_URL =
@@ -306,3 +308,40 @@ export async function switchUserExam(_userId: string | undefined, exam: ExamType
   await ensureOk(res, "Failed to switch exam");
   return res.json();
 }
+
+// ----------------- NCERT RAG API -----------------
+export async function fetchNCERTChapters(): Promise<NCERTChapter[]> {
+  const res = await apiFetch("/ncert/chapters");
+  await ensureOk(res, "Failed to load NCERT chapters");
+  return res.json();
+}
+
+export async function fetchNCERTStatus(chapterId: string = "physics-units"): Promise<{
+  is_indexed: boolean;
+  chunk_count: number;
+  chapter_id: string;
+}> {
+  const res = await apiFetch(`/ncert/status?chapter_id=${encodeURIComponent(chapterId)}`);
+  await ensureOk(res, "Failed to check NCERT status");
+  return res.json();
+}
+
+export async function sendNCERTChatMessage(payload: {
+  chapter_id?: string;
+  question: string;
+  history?: Array<{ role: "user" | "assistant"; content: string }>;
+  top_k?: number;
+}): Promise<NCERTChatResponse> {
+  const res = await apiFetch("/ncert/chat", {
+    method: "POST",
+    body: JSON.stringify({
+      chapter_id: payload.chapter_id || "physics-units",
+      question: payload.question,
+      history: payload.history,
+      top_k: payload.top_k || 3,
+    }),
+  });
+  await ensureOk(res, "Failed to get NCERT response");
+  return res.json();
+}
+
