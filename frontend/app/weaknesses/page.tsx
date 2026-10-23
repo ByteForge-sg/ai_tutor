@@ -1,12 +1,12 @@
 "use client";
 
 import React, { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 import { fetchWeaknesses, startWeaknessIntervention, submitWeaknessIntervention, switchUserExam } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, setCurrentUser } from "@/lib/auth";
 import { WeaknessItem, InterventionData, InterventionResult, ExamType } from "@/types";
 import {
   AlertTriangle,
@@ -19,6 +19,9 @@ import {
 
 function WeaknessesContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const [user, setUser] = useState<ReturnType<typeof getCurrentUser>>(null);
+  const [error, setError] = useState<string | null>(null);
   const initialTopic = searchParams.get("topic");
 
   const [currentExam, setCurrentExam] = useState<ExamType>("JEE");
@@ -32,55 +35,77 @@ function WeaknessesContent() {
   const [isSubmittingIntervention, setIsSubmittingIntervention] = useState(false);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
 
-  const loadWeaknesses = async (exam: ExamType) => {
+  const loadWeaknesses = async (userId: string, exam: ExamType) => {
     try {
       setLoading(true);
-      const data = await fetchWeaknesses("user_demo", exam);
+      setError(null);
+      const data = await fetchWeaknesses(userId, exam);
       setWeaknesses(data);
-
-      if (initialTopic) {
-        handleStartIntervention(initialTopic);
-      }
     } catch (e) {
-      console.error(e);
+      const message = e instanceof Error ? e.message : "Failed to load weaknesses.";
+      setError(message);
+      console.error("Failed to load weaknesses:", e);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    const user = getCurrentUser();
-    if (user?.target_exam) {
-      setCurrentExam(user.target_exam);
+    const currentUser = getCurrentUser();
+
+    if (!currentUser) {
+      router.replace("/login");
+      return;
     }
-    loadWeaknesses(user?.target_exam || "JEE");
-  }, []);
+
+    setUser(currentUser);
+    const exam = currentUser.target_exam || "JEE";
+    setCurrentExam(exam);
+    void loadWeaknesses(currentUser.id, exam);
+  }, [router]);
+
+  useEffect(() => {
+    if (initialTopic && user) {
+      void handleStartIntervention(initialTopic);
+    }
+    // Run when the signed-in user/topic is available.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialTopic, user?.id]);
 
   const handleStartIntervention = async (topic: string) => {
+    if (!user) {
+      router.replace("/login");
+      return;
+    }
+
     try {
-      const data = await startWeaknessIntervention(topic, "user_demo", currentExam);
+      const data = await startWeaknessIntervention(topic, user.id, currentExam);
       setActiveIntervention(data);
       setCurrentStep(1);
       setInterventionAnswers({});
       setInterventionResult(null);
     } catch (e) {
-      console.error("Failed to launch intervention", e);
+      const message = e instanceof Error ? e.message : "Failed to launch intervention.";
+      setError(message);
+      console.error("Failed to launch intervention:", e);
     }
   };
 
   const handleFinishIntervention = async () => {
-    if (!activeIntervention) return;
+    if (!activeIntervention || !user) return;
     try {
       setIsSubmittingIntervention(true);
       const res = await submitWeaknessIntervention(
         activeIntervention.intervention_id,
         interventionAnswers,
-        "user_demo"
+        user.id
       );
       setInterventionResult(res);
-      loadWeaknesses(currentExam);
+      await loadWeaknesses(user.id, currentExam);
     } catch (e) {
-      console.error(e);
+      const message = e instanceof Error ? e.message : "Failed to submit intervention.";
+      setError(message);
+      console.error("Failed to submit intervention:", e);
     } finally {
       setIsSubmittingIntervention(false);
     }
@@ -97,10 +122,25 @@ function WeaknessesContent() {
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           currentExam={currentExam}
-          onExamChange={(newExam) => {
+          onExamChange={async (newExam) => {
+            if (!user) {
+              router.replace("/login");
+              return;
+            }
+            const previousExam = currentExam;
             setCurrentExam(newExam);
-            switchUserExam("user_demo", newExam);
-            loadWeaknesses(newExam);
+            try {
+              await switchUserExam(user.id, newExam);
+              const updatedUser = { ...user, target_exam: newExam };
+              setUser(updatedUser);
+              setCurrentUser(updatedUser);
+              await loadWeaknesses(user.id, newExam);
+            } catch (e) {
+              setCurrentExam(previousExam);
+              const message = e instanceof Error ? e.message : "Failed to switch exam.";
+              setError(message);
+              console.error("Failed to switch exam:", e);
+            }
           }}
           onOpenCoach={() => setIsCoachOpen(true)}
         />
@@ -120,6 +160,20 @@ function WeaknessesContent() {
               Cognitive error patterns detected across your test and practice history.
             </p>
           </div>
+
+          {error && (
+            <div className="why-glass-card p-4 border border-rose-500/40 text-rose-300 rounded-[12px]">
+              <p className="text-[13px]">{error}</p>
+              {error.toLowerCase().includes("authentication") && (
+                <button
+                  onClick={() => router.replace("/login")}
+                  className="mt-3 why-btn-gradient px-4 py-2 text-[12px]"
+                >
+                  Sign in again
+                </button>
+              )}
+            </div>
+          )}
 
           {loading ? (
             <div className="py-24 flex flex-col items-center justify-center space-y-3">

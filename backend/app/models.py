@@ -1,10 +1,13 @@
-from pydantic import BaseModel, Field
+
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict, Any
 from enum import Enum
+
 
 class ExamType(str, Enum):
     JEE = "JEE"
     NEET = "NEET"
+
 
 class MistakeType(str, Enum):
     CONCEPTUAL_MISUNDERSTANDING = "CONCEPTUAL_MISUNDERSTANDING"
@@ -17,18 +20,40 @@ class MistakeType(str, Enum):
     TIME_PRESSURE = "TIME_PRESSURE"
     MEMORY_ERROR = "MEMORY_ERROR"
 
+
+# Authentication
+class UserSignupRequest(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+    name: str = Field(min_length=1, max_length=100)
+    target_exam: ExamType = ExamType.JEE
+
+
 class UserLoginRequest(BaseModel):
-    email: str
-    target_exam: Optional[str] = "JEE"
-    name: Optional[str] = None
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
 
 class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     id: str
     email: str
     name: str
     target_exam: str
     avatar: Optional[str] = None
     created_at: str
+
+
+class AuthResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    user: UserResponse
+
+
+class ExamUpdateRequest(BaseModel):
+    target_exam: ExamType
+
 
 class QuestionOut(BaseModel):
     id: str
@@ -42,12 +67,14 @@ class QuestionOut(BaseModel):
     source_type: str
     year: int
 
+
 class QuestionDetail(QuestionOut):
     correct_answer: str
     explanation: str
     concept: str
     common_mistake: str
     mistake_categories: List[str]
+
 
 class TestListItem(BaseModel):
     id: str
@@ -63,12 +90,15 @@ class TestListItem(BaseModel):
     marking_incorrect: int
     marking_unattempted: int
     difficulty: str
-    attempt_status: Optional[str] = "NOT_STARTED" # NOT_STARTED, IN_PROGRESS, COMPLETED
+    attempt_status: Optional[str] = "NOT_STARTED"
     last_score: Optional[int] = None
+    attempts: List[Dict[str, Any]] = Field(default_factory=list)
+
 
 class StartTestRequest(BaseModel):
     test_id: str
-    user_id: str
+    user_id: Optional[str] = None
+
 
 class TestAttemptOut(BaseModel):
     id: str
@@ -82,22 +112,26 @@ class TestAttemptOut(BaseModel):
     time_remaining_seconds: int
     total_questions: int
     questions: List[QuestionOut]
-    answers: Dict[str, str] = {} # question_id -> selected_option
-    review_status: Dict[str, bool] = {} # question_id -> marked_for_review
+    answers: Dict[str, str] = Field(default_factory=dict)
+    review_status: Dict[str, bool] = Field(default_factory=dict)
+
 
 class SaveAnswerRequest(BaseModel):
     question_id: str
-    selected_answer: Optional[str] = None # 'A', 'B', 'C', 'D' or null to clear
+    selected_answer: Optional[str] = None
     is_marked_for_review: Optional[bool] = False
     time_taken_seconds: Optional[int] = 0
 
+
 class IntegrityEventRequest(BaseModel):
-    event_type: str # TAB_SWITCH, FULLSCREEN_EXIT, WINDOW_BLUR, PAGE_LEAVE
+    event_type: str
     details: Optional[str] = None
+
 
 class SubmitTestRequest(BaseModel):
     answers: Optional[Dict[str, str]] = None
     time_spent_seconds: Optional[int] = None
+
 
 class QuestionResultItem(BaseModel):
     question_id: str
@@ -115,6 +149,7 @@ class QuestionResultItem(BaseModel):
     mistake_type: Optional[str]
     ai_diagnosis: Optional[Dict[str, Any]] = None
 
+
 class SubjectScoreSummary(BaseModel):
     subject: str
     total_questions: int
@@ -124,6 +159,7 @@ class SubjectScoreSummary(BaseModel):
     accuracy_percent: float
     score: int
     avg_time_seconds: int
+
 
 class TestResultOut(BaseModel):
     attempt_id: str
@@ -145,11 +181,13 @@ class TestResultOut(BaseModel):
     subject_breakdown: List[SubjectScoreSummary]
     question_results: List[QuestionResultItem]
 
+
 class PracticeAnswerRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     question_id: str
     selected_answer: str
     time_taken_seconds: int = 45
+
 
 class PracticeAnswerResponse(BaseModel):
     is_correct: bool
@@ -163,12 +201,14 @@ class PracticeAnswerResponse(BaseModel):
     streak_updated: int
     questions_solved_today: int
 
+
 class MistakeDiagnosisOut(BaseModel):
     mistakeType: str
     confidence: float
     diagnosis: str
     conceptGap: str
     recommendation: str
+
 
 class RecurringMistakeItem(BaseModel):
     mistake_type: str
@@ -181,6 +221,7 @@ class RecurringMistakeItem(BaseModel):
     last_seen: str
     trend: str
 
+
 class WeaknessItem(BaseModel):
     id: str
     topic: str
@@ -190,7 +231,8 @@ class WeaknessItem(BaseModel):
     occurrences: int
     accuracy_percent: float
     last_seen: str
-    trend: str # recurring, improving, critical
+    trend: str
+
 
 class FixWeaknessInterventionOut(BaseModel):
     intervention_id: str
@@ -206,8 +248,10 @@ class FixWeaknessInterventionOut(BaseModel):
     practice_set: List[QuestionOut]
     challenge_question: QuestionOut
 
+
 class CompleteInterventionRequest(BaseModel):
-    answers: Dict[str, str] # question_id -> selected_option
+    answers: Dict[str, str]
+
 
 class InterventionResultOut(BaseModel):
     intervention_id: str
@@ -220,15 +264,17 @@ class InterventionResultOut(BaseModel):
     correct_count: int
     message: str
 
+
 class DayActivity(BaseModel):
-    date: str # YYYY-MM-DD
-    questions_solved: int # completed attempts
+    date: str
+    questions_solved: int
     correct_count: int
     incorrect_count: int
     accuracy_percent: float
     practice_time_minutes: int
     mistakes_detected: int
-    level: int # 0 to 5 for GitHub contribution grid color
+    level: int
+
 
 class ContributionGridData(BaseModel):
     start_date: str
@@ -239,6 +285,7 @@ class ContributionGridData(BaseModel):
     longest_streak: int
     days: List[DayActivity]
 
+
 class DashboardSummaryOut(BaseModel):
     user: UserResponse
     questions_solved: int
@@ -246,20 +293,25 @@ class DashboardSummaryOut(BaseModel):
     current_streak: int
     longest_streak: int
     tests_completed: int
-    monthly_growth_percent: float
+    weaknesses_count: int = 0
+    monthly_growth_percent: Optional[float] = None
+    monthly_trends: List[Dict[str, Any]] = Field(default_factory=list)
+    subject_performance: List[Dict[str, Any]] = Field(default_factory=list)
     weakest_area: Optional[WeaknessItem] = None
     recurring_mistake: Optional[RecurringMistakeItem] = None
     daily_goals: Dict[str, Any]
     contribution_grid: ContributionGridData
     recent_activity: List[Dict[str, Any]]
 
+
 class AIChatRequest(BaseModel):
-    user_id: str
+    user_id: Optional[str] = None
     message: str
-    current_attempt_id: Optional[str] = None # If test is running, must block!
-    context: Optional[Dict[str, Any]] = None # question, mistake, topic
+    current_attempt_id: Optional[str] = None
+    context: Optional[Dict[str, Any]] = None
+
 
 class AIChatResponse(BaseModel):
     reply: str
-    mode: str # "EXAM_BLOCKED" or "HELPFUL"
+    mode: str
     suggestions: Optional[List[str]] = None

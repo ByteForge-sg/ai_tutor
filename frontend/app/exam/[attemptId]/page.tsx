@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState, use } from "react";
+import React, { useCallback, useEffect, useRef, useState, use } from "react";
 import { useRouter } from "next/navigation";
-import { getExamState, reportIntegrityEvent, submitExam } from "@/lib/api";
+import { getExamState, reportIntegrityEvent, saveExamAnswer, submitExam } from "@/lib/api";
 import { ActiveExamState } from "@/types";
 import {
   Clock,
@@ -10,8 +10,6 @@ import {
   Bookmark,
   ShieldAlert,
   BotMessageSquare,
-  Sparkles,
-  X
 } from "lucide-react";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 
@@ -30,19 +28,48 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
 
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [integrityWarning, setIntegrityWarning] = useState<string | null>(null);
-  const [integrityFlagsCount, setIntegrityFlagsCount] = useState(0);
+  const [answerSaveError, setAnswerSaveError] = useState<string | null>(null);
 
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
+  const userAnswersRef = useRef<Record<string, string>>({});
+  const submittingRef = useRef(false);
+
+  const handleIntegrityAlert = (res: { flags_count: number }) => {
+    if (res.flags_count === 1) {
+      setIntegrityWarning("Integrity Notice: Tab switch or window blur detected. Controlled exam environment active.");
+    } else {
+      setIntegrityWarning(`Critical Integrity Warning: Repeated event detected (${res.flags_count} violations). Attempt flagged on server.`);
+    }
+  };
+
+  const handleAutoSubmit = useCallback(async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    try {
+      setIsSubmitting(true);
+      const res = await submitExam(attemptId, userAnswersRef.current);
+      router.push(`/results/${res.attempt_id}`);
+    } catch (e) {
+      console.error(e);
+      submittingRef.current = false;
+      setIsSubmitting(false);
+    }
+  }, [attemptId, router]);
 
   useEffect(() => {
     async function init() {
       try {
         setLoading(true);
         const data = await getExamState(attemptId);
+        if (data.status === "SUBMITTED" || data.status === "AUTO_SUBMITTED") {
+          router.replace(`/results/${attemptId}`);
+          return;
+        }
         setExamState(data);
         setUserAnswers(data.answers || {});
+        userAnswersRef.current = data.answers || {};
         setSecondsRemaining(data.time_remaining_seconds);
       } catch (err) {
         console.error("Failed to load active exam", err);
@@ -51,24 +78,25 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
       }
     }
     init();
-  }, [attemptId]);
+  }, [attemptId, router]);
 
   useEffect(() => {
     if (loading || !examState) return;
 
     const timer = setInterval(() => {
       setSecondsRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
+        return Math.max(0, prev - 1);
       });
     }, 1000);
 
     return () => clearInterval(timer);
   }, [loading, examState]);
+
+  useEffect(() => {
+    if (secondsRemaining !== 0 || loading || !examState) return;
+    const timer = window.setTimeout(() => void handleAutoSubmit(), 0);
+    return () => window.clearTimeout(timer);
+  }, [secondsRemaining, loading, examState, handleAutoSubmit]);
 
   useEffect(() => {
     if (loading || !examState) return;
@@ -108,39 +136,18 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
       document.removeEventListener("fullscreenchange", handleFullscreenChange);
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [loading, examState, attemptId]);
-
-  const handleIntegrityAlert = (res: any) => {
-    setIntegrityFlagsCount(res.flags_count);
-    if (res.flags_count === 1) {
-      setIntegrityWarning(
-        "Integrity Notice: Tab switch or window blur detected. Controlled exam environment active."
-      );
-    } else {
-      setIntegrityWarning(
-        `Critical Integrity Warning: Repeated event detected (${res.flags_count} violations). Attempt flagged on server.`
-      );
-    }
-  };
-
-  const handleAutoSubmit = async () => {
-    try {
-      setIsSubmitting(true);
-      const res = await submitExam(attemptId, userAnswers, "user_demo");
-      router.push(`/results/${res.attempt_id}`);
-    } catch (e) {
-      console.error(e);
-      setIsSubmitting(false);
-    }
-  };
+  }, [loading, examState, attemptId, isSubmitting]);
 
   const handleFinalSubmit = async () => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     try {
       setIsSubmitting(true);
-      const res = await submitExam(attemptId, userAnswers, "user_demo");
+      const res = await submitExam(attemptId, userAnswersRef.current);
       router.push(`/results/${res.attempt_id}`);
     } catch (e) {
       console.error(e);
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -215,6 +222,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
 
           <button
             onClick={() => setShowSubmitModal(true)}
+            disabled={isSubmitting}
             className="why-btn-gradient px-4 py-1.5 text-[13px] font-bold shadow-md shadow-purple-500/30"
           >
             Submit Test
@@ -235,6 +243,11 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
           >
             Acknowledge
           </button>
+        </div>
+      )}
+      {answerSaveError && !isSubmitting && (
+        <div role="alert" className="bg-amber-950/80 border-b border-amber-500/50 px-6 py-2 text-[12px] text-amber-200">
+          {answerSaveError} Your current answers will be included when you submit.
         </div>
       )}
 
@@ -277,12 +290,20 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
                     <div
                       key={oIdx}
                       onClick={() => {
-                        setUserAnswers((prev) => ({
+                        setUserAnswers((prev) => {
+                          const next = {
                           ...prev,
                           [currentQ.id]: optChar,
-                        }));
+                          };
+                          userAnswersRef.current = next;
+                          return next;
+                        });
+                        setAnswerSaveError(null);
+                        void saveExamAnswer(attemptId, currentQ.id, optChar).catch((error) => {
+                          setAnswerSaveError(error instanceof Error ? error.message : "Answer could not be saved yet.");
+                        });
                       }}
-                      className={`p-4 rounded-[12px] border text-[14px] cursor-pointer transition-all flex items-center justify-between ${
+                      className={`p-4 rounded-[12px] border text-[14px] cursor-pointer transition-all flex items-center justify-between ${isSubmitting ? "pointer-events-none opacity-60" : ""} ${
                         isSelected
                           ? "border-purple-500 bg-purple-950/40 text-white font-bold ring-2 ring-purple-500/50 shadow-md shadow-purple-500/20"
                           : "border-white/10 bg-white/5 hover:bg-white/10 text-slate-200"
@@ -301,6 +322,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
           <div className="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-[13px]">
             <div className="flex items-center gap-2">
               <button
+                disabled={isSubmitting}
                 onClick={() => {
                   setMarkedForReview((prev) => ({
                     ...prev,
@@ -322,9 +344,15 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
                   setUserAnswers((prev) => {
                     const copy = { ...prev };
                     delete copy[currentQ.id];
+                    userAnswersRef.current = copy;
                     return copy;
                   });
+                  setAnswerSaveError(null);
+                  void saveExamAnswer(attemptId, currentQ.id, null).catch((error) => {
+                    setAnswerSaveError(error instanceof Error ? error.message : "Answer could not be saved yet.");
+                  });
                 }}
+                disabled={isSubmitting}
                 className="px-3.5 py-2 rounded-[10px] border border-white/10 text-slate-400 hover:text-white hover:bg-white/5 font-medium"
               >
                 Clear Response
@@ -333,7 +361,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
 
             <div className="flex items-center gap-2">
               <button
-                disabled={currentQIndex === 0}
+                disabled={isSubmitting || currentQIndex === 0}
                 onClick={() => {
                   setCurrentQIndex((prev) => Math.max(0, prev - 1));
                   setVisited((prev) => ({ ...prev, [currentQIndex - 1]: true }));
@@ -344,6 +372,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
               </button>
 
               <button
+                disabled={isSubmitting}
                 onClick={() => {
                   if (currentQIndex < examState.total_questions - 1) {
                     setCurrentQIndex((prev) => prev + 1);
@@ -406,6 +435,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
                   return (
                     <button
                       key={q.id}
+                      disabled={isSubmitting}
                       onClick={() => {
                         setCurrentQIndex(qIdx);
                         setVisited((prev) => ({ ...prev, [qIdx]: true }));
@@ -478,6 +508,7 @@ export default function ExamPage({ params }: { params: Promise<{ attemptId: stri
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/10">
               <button
                 onClick={() => setShowSubmitModal(false)}
+                disabled={isSubmitting}
                 className="why-btn-dark px-4 py-2 text-[13px]"
               >
                 Return to Exam

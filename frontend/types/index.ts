@@ -103,12 +103,26 @@ export interface DashboardData {
   current_streak: number;
   longest_streak: number;
   tests_completed: number;
-  monthly_growth_percent: number;
+  weaknesses_count: number;
+  monthly_growth_percent: number | null;
+  monthly_trends: { month: string; questions: number; accuracy: number | null }[];
+  subject_performance: { subject: string; solved: number; accuracy: number | null }[];
   weakest_area?: WeaknessItem;
   recurring_mistake?: RecurringMistake;
   daily_goals: DailyGoals;
   contribution_grid: ContributionGrid;
-  recent_activity: any[];
+  recent_activity: {
+    id: string;
+    question_id: string;
+    question_text: string;
+    selected_answer: string | null;
+    correct_answer: string;
+    is_correct: number;
+    time_taken_seconds: number;
+    timestamp: string;
+    topic: string;
+    mistake_type: string | null;
+  }[];
 }
 
 export interface TestItem {
@@ -127,6 +141,7 @@ export interface TestItem {
   difficulty: string;
   attempt_status?: "NOT_STARTED" | "RUNNING" | "SUBMITTED" | "AUTO_SUBMITTED";
   last_score?: number;
+  attempts: { id: string; status: string; score: number; max_score: number; submitted_at?: string | null }[];
 }
 
 export interface ActiveExamState {

@@ -79,7 +79,7 @@ $$\mathbf{http://localhost:3000}$$
 ```bash
 cd backend
 source ../venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8008
+uvicorn app.main:app --host 0.0.0.0 --port 8008 --reload --reload-dir app
 ```
 
 ### 2. Start Frontend (Port 3000)

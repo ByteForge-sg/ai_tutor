@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
@@ -13,17 +13,8 @@ import RecurringMistakeCard from "@/components/dashboard/RecurringMistakeCard";
 import AISuiteCards from "@/components/dashboard/AISuiteCards";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 import { fetchDashboard, switchUserExam } from "@/lib/api";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, logout, setCurrentUser } from "@/lib/auth";
 import { DashboardData, ExamType, User } from "@/types";
-import {
-  Sparkles,
-  RefreshCw,
-  Flame,
-  ArrowRight,
-  GraduationCap,
-  Brain
-} from "lucide-react";
-import Link from "next/link";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -35,37 +26,59 @@ export default function DashboardPage() {
   const [isCoachOpen, setIsCoachOpen] = useState(false);
   const [activeHeaderPill, setActiveHeaderPill] = useState("AI Active");
 
-  const loadData = async (exam: ExamType) => {
+  const loadData = useCallback(async (exam: ExamType) => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetchDashboard("user_demo", exam);
+      const res = await fetchDashboard(user?.id ?? undefined, exam);
       setData(res);
       setCurrentExam(res.user.target_exam);
-    } catch (err: any) {
-      setError(err.message || "Failed to load dashboard data");
+      setUser(res.user);
+      setCurrentUser(res.user);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
     } finally {
       setLoading(false);
     }
-  };
+  }, [user?.id]);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
-    setUser(currentUser);
-    if (currentUser?.target_exam) {
-      setCurrentExam(currentUser.target_exam);
+
+    // Never silently fall back to a demo account.
+    if (!currentUser) {
+      router.replace("/login");
+      return;
     }
-    loadData(currentUser?.target_exam || "JEE");
-  }, []);
+
+    setUser(currentUser);
+    setCurrentExam(currentUser.target_exam || "JEE");
+    void loadData(currentUser.target_exam || "JEE");
+  }, [router, loadData]);
 
   const handleExamChange = async (newExam: ExamType) => {
+    if (!user) return;
+
+    const previousExam = currentExam;
     setCurrentExam(newExam);
     try {
-      await switchUserExam("user_demo", newExam);
+      const updated = await switchUserExam(user.id, newExam);
+      if (updated?.user) {
+        setUser(updated.user);
+        setCurrentUser(updated.user);
+      } else {
+        setCurrentUser({ ...user, target_exam: newExam });
+      }
       await loadData(newExam);
-    } catch (e) {
-      console.error(e);
+    } catch (err) {
+      setCurrentExam(previousExam);
+      setError(err instanceof Error ? err.message : "Failed to switch exam");
     }
+  };
+
+  const handleLogout = () => {
+    logout();
+    router.replace("/login");
   };
 
   const handleFixWeakness = (topic: string) => {
@@ -85,10 +98,8 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-screen bg-[#07050E] text-white">
-      {/* Sidebar matching reference image */}
       <Sidebar onOpenCoach={() => setIsCoachOpen(true)} />
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           currentExam={currentExam}
@@ -97,18 +108,16 @@ export default function DashboardPage() {
         />
 
         <main className="p-6 lg:p-8 space-y-6 max-w-7xl w-full mx-auto">
-          {/* Welcome Header & Pill Switcher matching the reference image */}
           <div className="flex flex-col md:flex-row md:items-center justify-between pb-3 gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-                Welcome back, {user?.name || "Aditya"}
+                Welcome back, {user?.name || "Student"}
               </h1>
               <p className="text-[13px] text-slate-400 mt-1">
                 Here&apos;s what&apos;s happening with your exam intelligence and mistake trends today.
               </p>
             </div>
 
-            {/* Pill Switcher matching image */}
             <div className="flex items-center gap-1.5 p-1 rounded-full bg-white/5 border border-white/10 self-start md:self-auto">
               {headerPills.map((pill) => (
                 <button
@@ -123,14 +132,20 @@ export default function DashboardPage() {
                   {pill.label}
                 </button>
               ))}
+              <button
+                onClick={handleLogout}
+                className="px-3 py-1.5 rounded-full text-[12px] font-semibold text-slate-400 hover:text-white"
+              >
+                Sign out
+              </button>
             </div>
           </div>
 
           {loading && !data ? (
             <div className="py-24 flex flex-col items-center justify-center space-y-3">
-              <div className="w-10 h-10 rounded-full border-2 border-purple-500 border-t-transparent animate-spin"></div>
+              <div className="w-10 h-10 rounded-full border-2 border-purple-500 border-t-transparent animate-spin" />
               <p className="text-[13px] text-slate-400 font-mono-numbers">
-                Synthesizing cognitive mistake intelligence from database...
+                Loading your dashboard...
               </p>
             </div>
           ) : error ? (
@@ -138,7 +153,7 @@ export default function DashboardPage() {
               <h3 className="font-semibold text-[15px]">Failed to sync dashboard</h3>
               <p className="text-[13px] mt-1">{error}</p>
               <button
-                onClick={() => loadData(currentExam)}
+                onClick={() => void loadData(currentExam)}
                 className="mt-3 px-4 py-1.5 bg-rose-600 text-white text-[12px] rounded-[8px] font-semibold"
               >
                 Retry
@@ -146,35 +161,25 @@ export default function DashboardPage() {
             </div>
           ) : data ? (
             <>
-              {/* 1. Top 4 Metric Cards with Neon Sparklines matching the reference image */}
               <MetricCards
                 questionsSolved={data.questions_solved}
                 accuracy={data.accuracy_percent}
                 currentStreak={data.current_streak}
                 testsCompleted={data.tests_completed}
-                weaknessesCount={data.weakest_area ? 3 : 1}
+                weaknessesCount={data.weaknesses_count}
               />
 
-              {/* 2. Main Middle Row: Performance Index Chart & Speedometer Gauge (matching the reference image!) */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left 2 Cols: AI Performance Index */}
                 <div className="lg:col-span-2">
-                  <PerformanceIndexChart growthPercent={data.monthly_growth_percent} />
+                  <PerformanceIndexChart growthPercent={data.monthly_growth_percent} score={data.questions_solved > 0 ? data.accuracy_percent : null} monthlyTrends={data.monthly_trends} />
                 </div>
-
-                {/* Right 1 Col: AI Confidence Index Speedometer Radial Gauge */}
                 <div className="lg:col-span-1">
                   <ConfidenceGauge
-                    score={data.accuracy_percent}
-                    performance={24}
-                    accuracy={Math.round(data.accuracy_percent * 0.45)}
-                    efficiency={27}
-                    reliability={17}
+                    score={data.questions_solved > 0 ? data.accuracy_percent : null}
                   />
                 </div>
               </div>
 
-              {/* 3. Core Feature: GitHub-Style Practice Consistency Grid */}
               <ContributionGrid
                 days={data.contribution_grid.days}
                 totalQuestions={data.contribution_grid.total_questions_solved}
@@ -182,7 +187,6 @@ export default function DashboardPage() {
                 longestStreak={data.contribution_grid.longest_streak}
               />
 
-              {/* 4. Secondary Row: Weakest Area & Recurring Mistake */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <WeakestAreaCard
                   weakness={data.weakest_area}
@@ -194,14 +198,12 @@ export default function DashboardPage() {
                 />
               </div>
 
-              {/* 5. Bottom AI Suite Cards matching the bottom section of reference image */}
               <AISuiteCards />
             </>
           ) : null}
         </main>
       </div>
 
-      {/* Floating AI Coach Drawer */}
       <AICoachDrawer
         isOpen={isCoachOpen}
         onClose={() => setIsCoachOpen(false)}

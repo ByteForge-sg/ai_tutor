@@ -6,7 +6,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 import MistakeDiagnosisCard from "@/components/questions/MistakeDiagnosisCard";
-import { getExamResults, switchUserExam } from "@/lib/api";
+import { getExamResults, processExamAnalytics, switchUserExam } from "@/lib/api";
 import { TestResult, ExamType } from "@/types";
 import {
   Trophy,
@@ -37,8 +37,12 @@ export default function ResultsPage({ params }: { params: Promise<{ attemptId: s
     async function load() {
       try {
         setLoading(true);
-        const data = await getExamResults(attemptId, "user_demo");
+        const data = await getExamResults(attemptId);
         setResult(data);
+        void processExamAnalytics(attemptId)
+          .then(() => getExamResults(attemptId))
+          .then(setResult)
+          .catch((error) => console.warn("Post-result analytics update failed", error));
 
         const firstIncorrect = data.question_results.find((q) => !q.is_correct && !q.is_unattempted);
         if (firstIncorrect) {
@@ -88,7 +92,7 @@ export default function ResultsPage({ params }: { params: Promise<{ attemptId: s
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar
           currentExam={result.exam}
-          onExamChange={(newExam) => switchUserExam("user_demo", newExam)}
+          onExamChange={(newExam) => switchUserExam(undefined, newExam)}
           onOpenCoach={() => setIsCoachOpen(true)}
         />
 

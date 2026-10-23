@@ -109,7 +109,6 @@ export default function TopBar({ currentExam, onExamChange, onOpenCoach }: TopBa
             className="w-10 h-10 rounded-[12px] bg-white/5 border border-white/10 hover:border-purple-500/30 text-slate-300 hover:text-white flex items-center justify-center transition-all relative"
           >
             <Bell size={18} />
-            <span className="w-2 h-2 rounded-full bg-rose-500 absolute top-2.5 right-2.5 shadow-sm shadow-rose-500/50"></span>
           </button>
 
           {showNotifications && (
@@ -118,16 +117,7 @@ export default function TopBar({ currentExam, onExamChange, onOpenCoach }: TopBa
                 <span className="text-[13px] font-semibold text-white">Integrity & Mistake Alerts</span>
                 <span className="text-[11px] text-purple-400 cursor-pointer">Clear</span>
               </div>
-              <div className="py-2 space-y-2 text-[12px]">
-                <div className="p-2.5 rounded-[8px] bg-purple-950/40 border border-purple-500/30">
-                  <span className="font-semibold text-purple-300 block">Recurring Misconception</span>
-                  <span className="text-slate-300">Formula selection error repeated 7 times in Mechanics.</span>
-                </div>
-                <div className="p-2.5 rounded-[8px] bg-white/5 border border-white/10">
-                  <span className="font-semibold text-emerald-400 block">Streak Protected</span>
-                  <span className="text-slate-400">9-day practice streak active. 8 questions solved today.</span>
-                </div>
-              </div>
+              <p className="py-4 text-[12px] text-slate-400">No new alerts.</p>
             </div>
           )}
         </div>
@@ -152,10 +142,10 @@ export default function TopBar({ currentExam, onExamChange, onOpenCoach }: TopBa
           </div>
           <div className="text-left hidden sm:block">
             <div className="text-[13px] font-bold text-white leading-tight group-hover:text-purple-300 transition-colors">
-              {user?.name || "Aditya Sharma"}
+              {user?.name || "Student"}
             </div>
             <div className="text-[10px] font-bold uppercase tracking-wider text-amber-400 font-mono-numbers">
-              {currentExam} Pro
+              {currentExam} Track
             </div>
           </div>
         </div>

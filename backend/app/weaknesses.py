@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 from app.database import get_db_connection
 from app.mistakes import datetime_now_iso, update_weakness_profile
 
-def get_user_weaknesses(user_id: str = "user_demo", exam: str = "JEE") -> List[Dict[str, Any]]:
+def get_user_weaknesses(user_id: str, exam: str = "JEE") -> List[Dict[str, Any]]:
     conn = get_db_connection()
     cursor = conn.cursor()
 

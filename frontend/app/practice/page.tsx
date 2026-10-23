@@ -84,7 +84,6 @@ export default function PracticePage() {
     try {
       setSubmitting(true);
       const res = await submitPracticeAnswer({
-        user_id: "user_demo",
         question_id: currentQ.id,
         selected_answer: selectedOption,
         time_taken_seconds: timerSeconds,
@@ -129,7 +128,7 @@ export default function PracticePage() {
           onExamChange={(newExam) => {
             setCurrentExam(newExam);
             setSelectedSubject("All");
-            switchUserExam("user_demo", newExam);
+            switchUserExam(undefined, newExam);
           }}
           onOpenCoach={() => setIsCoachOpen(true)}
         />
@@ -339,7 +338,7 @@ export default function PracticePage() {
                       )}
                       <div>
                         <div className="font-extrabold text-[16px]">
-                          {attemptResult.is_correct ? "Correct Response (+4 Marks)" : "Incorrect Response (-1 Mark)"}
+                          {attemptResult.is_correct ? "Correct Response" : "Incorrect Response"}
                         </div>
                         <div className="text-[12px] opacity-90 mt-0.5">
                           {attemptResult.is_correct

@@ -13,20 +13,12 @@ import {
 import { Maximize2, ArrowUpRight } from "lucide-react";
 
 interface PerformanceIndexChartProps {
-  growthPercent?: number;
+  growthPercent?: number | null;
+  score: number | null;
+  monthlyTrends: { month: string; questions: number; accuracy: number | null }[];
 }
 
-export default function PerformanceIndexChart({ growthPercent = 14.3 }: PerformanceIndexChartProps) {
-  const chartData = [
-    { period: "Jan", score: 42, velocity: 120 },
-    { period: "Mar", score: 42, velocity: 160 },
-    { period: "Apr", score: 40, velocity: 220 },
-    { period: "Jun", score: 32, velocity: 280 },
-    { period: "July", score: 36, velocity: 340 },
-    { period: "Aug", score: 52, velocity: 410 },
-    { period: "Oct", score: 38, velocity: 470 },
-    { period: "Dec", score: 68, velocity: 520 },
-  ];
+export default function PerformanceIndexChart({ growthPercent, score, monthlyTrends }: PerformanceIndexChartProps) {
 
   return (
     <div className="why-glass-card p-6 flex flex-col justify-between h-full">
@@ -34,7 +26,7 @@ export default function PerformanceIndexChart({ growthPercent = 14.3 }: Performa
       <div>
         <div className="flex items-center justify-between">
           <span className="text-[14px] font-bold text-white tracking-tight">
-            AI Performance Index
+            Accuracy Trend
           </span>
           <button className="text-slate-400 hover:text-white p-1 rounded-md transition-colors">
             <Maximize2 size={16} />
@@ -44,22 +36,19 @@ export default function PerformanceIndexChart({ growthPercent = 14.3 }: Performa
         {/* Big Metric Display */}
         <div className="flex items-baseline gap-3 mt-2">
           <span className="text-[32px] font-extrabold font-mono-numbers text-white tracking-tight">
-            71.3%
+            {score === null ? "—" : `${score}%`}
           </span>
-          <span className="inline-flex items-center gap-0.5 text-[12px] font-bold font-mono-numbers px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-            <ArrowUpRight size={14} />
-            <span>+{growthPercent}%</span>
-          </span>
+          {growthPercent == null ? <span className="text-[11px] text-slate-400">No prior month comparison</span> : <span className="inline-flex items-center gap-0.5 text-[12px] font-bold font-mono-numbers px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"><ArrowUpRight size={14} /><span>{growthPercent > 0 ? "+" : ""}{growthPercent}% this month</span></span>}
         </div>
         <p className="text-[12px] text-slate-400 mt-0.5">
-          Cognitive mastery velocity across Physics, Chemistry, and Mathematics
+          Accuracy calculated from your answered question attempts
         </p>
       </div>
 
       {/* Recharts Area Curve matching the glowing purple line */}
       <div className="h-48 mt-4 w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+        {monthlyTrends.length ? <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={monthlyTrends.map((item) => ({ period: item.month, score: item.accuracy }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
             <defs>
               <linearGradient id="purpleGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#8B5CF6" stopOpacity={0.45} />
@@ -81,7 +70,7 @@ export default function PerformanceIndexChart({ growthPercent = 14.3 }: Performa
               tickLine={false}
               axisLine={false}
               unit="%"
-              domain={[20, 80]}
+              domain={[0, 100]}
               fontFamily="JetBrains Mono"
             />
             <Tooltip
@@ -105,7 +94,7 @@ export default function PerformanceIndexChart({ growthPercent = 14.3 }: Performa
               activeDot={{ r: 6, fill: "#38BDF8", stroke: "#FFFFFF", strokeWidth: 2 }}
             />
           </AreaChart>
-        </ResponsiveContainer>
+        </ResponsiveContainer> : <div className="h-full flex items-center justify-center text-sm text-slate-500">No recent question history</div>}
       </div>
     </div>
   );

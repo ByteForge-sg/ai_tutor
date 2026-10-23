@@ -5,53 +5,31 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import AICoachDrawer from "@/components/coach/AICoachDrawer";
 import { fetchDashboard, switchUserExam } from "@/lib/api";
+import { getCurrentUser } from "@/lib/auth";
 import { DashboardData, ExamType } from "@/types";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
-import { TrendingUp, Award, Target, Clock, Calendar, CheckCircle2, Zap } from "lucide-react";
+import { TrendingUp } from "lucide-react";
 
 export default function ProgressPage() {
   const [currentExam, setCurrentExam] = useState<ExamType>("JEE");
   const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
   const [isCoachOpen, setIsCoachOpen] = useState(false);
 
   useEffect(() => {
     async function load() {
       try {
-        setLoading(true);
-        const res = await fetchDashboard("user_demo", currentExam);
+        const res = await fetchDashboard(undefined, currentExam);
         setData(res);
       } catch (e) {
         console.error(e);
-      } finally {
-        setLoading(false);
       }
     }
     load();
   }, [currentExam]);
 
   // Aggregate monthly activity data for charts
-  const monthlyTrends = [
-    { month: "May", questions: 380, accuracy: 64.2 },
-    { month: "Jun", questions: 420, accuracy: 66.8 },
-    { month: "Jul", questions: 490, accuracy: 68.5 },
-    { month: "Aug", questions: 510, accuracy: 70.1 },
-    { month: "Sep", questions: 540, accuracy: 71.0 },
-    { month: "Oct", questions: 491, accuracy: 71.3 },
-  ];
-
-  const subjectPerformance =
-    currentExam === "JEE"
-      ? [
-          { subject: "Physics", accuracy: 68.4, solved: 980, color: "#8B5CF6" },
-          { subject: "Chemistry", accuracy: 76.2, solved: 1040, color: "#06B6D4" },
-          { subject: "Mathematics", accuracy: 69.5, solved: 811, color: "#F59E0B" },
-        ]
-      : [
-          { subject: "Physics", accuracy: 68.4, solved: 980, color: "#8B5CF6" },
-          { subject: "Chemistry", accuracy: 76.2, solved: 1040, color: "#06B6D4" },
-          { subject: "Biology", accuracy: 79.5, solved: 1120, color: "#10B981" },
-        ];
+  const monthlyTrends = data?.monthly_trends || [];
+  const subjectPerformance = data?.subject_performance || [];
 
   return (
     <div className="flex min-h-screen bg-[#07050E] text-white">
@@ -62,7 +40,7 @@ export default function ProgressPage() {
           currentExam={currentExam}
           onExamChange={(newExam) => {
             setCurrentExam(newExam);
-            switchUserExam("user_demo", newExam);
+            switchUserExam(getCurrentUser()?.id, newExam);
           }}
           onOpenCoach={() => setIsCoachOpen(true)}
         />
@@ -77,7 +55,7 @@ export default function ProgressPage() {
               </h1>
             </div>
             <p className="text-[13px] text-slate-400 mt-1">
-              Derived from {data?.questions_solved.toLocaleString() || "2,831"} stored question attempts across 6 months.
+              {data?.questions_solved.toLocaleString() ?? "—"} answered question attempts stored for this account.
             </p>
           </div>
 
@@ -88,9 +66,9 @@ export default function ProgressPage() {
                 Total Solved
               </span>
               <div className="text-[26px] font-extrabold font-mono-numbers text-white mt-1">
-                {data?.questions_solved.toLocaleString() || "2,831"}
+                {data?.questions_solved.toLocaleString() ?? "—"}
               </div>
-              <span className="text-[11px] text-emerald-400 font-mono-numbers">+12.5% this month</span>
+              <span className="text-[11px] text-slate-400 font-mono-numbers">{data?.monthly_growth_percent == null ? "No prior month data" : `${data.monthly_growth_percent > 0 ? "+" : ""}${data.monthly_growth_percent}% this month`}</span>
             </div>
 
             <div className="why-glass-card p-4 rounded-[14px] border border-white/10">
@@ -98,9 +76,9 @@ export default function ProgressPage() {
                 Global Accuracy
               </span>
               <div className="text-[26px] font-extrabold font-mono-numbers text-cyan-400 mt-1">
-                {data?.accuracy_percent || 71.3}%
+                {data && data.questions_solved > 0 ? `${data.accuracy_percent}%` : "—"}
               </div>
-              <span className="text-[11px] text-emerald-400 font-mono-numbers">+2.1% this month</span>
+              <span className="text-[11px] text-slate-400 font-mono-numbers">Based on answered questions</span>
             </div>
 
             <div className="why-glass-card p-4 rounded-[14px] border border-white/10">
@@ -108,9 +86,9 @@ export default function ProgressPage() {
                 Active Streak
               </span>
               <div className="text-[26px] font-extrabold font-mono-numbers text-amber-400 mt-1">
-                {data?.current_streak || 9} Days
+                {data?.current_streak ?? "—"} Days
               </div>
-              <span className="text-[11px] text-amber-300 font-mono-numbers">Protected daily</span>
+              <span className="text-[11px] text-amber-300 font-mono-numbers">5 questions qualify a day</span>
             </div>
 
             <div className="why-glass-card p-4 rounded-[14px] border border-white/10">
@@ -118,9 +96,9 @@ export default function ProgressPage() {
                 Tests Completed
               </span>
               <div className="text-[26px] font-extrabold font-mono-numbers text-purple-400 mt-1">
-                {data?.tests_completed || 1} Mocks
+                {data?.tests_completed ?? "—"} Mocks
               </div>
-              <span className="text-[11px] text-purple-300 font-mono-numbers">Full simulation</span>
+              <span className="text-[11px] text-purple-300 font-mono-numbers">Submitted attempts</span>
             </div>
           </div>
 
@@ -131,19 +109,17 @@ export default function ProgressPage() {
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div>
                   <h3 className="text-[15px] font-bold text-white">Accuracy Trajectory</h3>
-                  <p className="text-[11px] text-slate-400">Progressive gain over last 6 months</p>
+                  <p className="text-[11px] text-slate-400">Accuracy from stored question attempts</p>
                 </div>
-                <span className="text-[12px] font-mono-numbers font-bold text-emerald-400 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
-                  +7.1% gain
-                </span>
+                {data?.monthly_trends?.length ? <span className="text-[12px] font-mono-numbers text-slate-400">{data.monthly_trends.length} active months</span> : null}
               </div>
 
               <div className="h-56 mt-4">
-                <ResponsiveContainer width="100%" height="100%">
+                {monthlyTrends.length ? <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="month" stroke="#64748B" fontSize={12} tickLine={false} />
-                    <YAxis domain={[60, 80]} stroke="#64748B" fontSize={12} tickLine={false} unit="%" />
+                    <YAxis domain={[0, 100]} stroke="#64748B" fontSize={12} tickLine={false} unit="%" />
                     <Tooltip
                       contentStyle={{
                         backgroundColor: "#120B24",
@@ -162,7 +138,7 @@ export default function ProgressPage() {
                       activeDot={{ r: 6, fill: "#38BDF8" }}
                     />
                   </LineChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer> : <p className="pt-20 text-center text-sm text-slate-500">No question history yet</p>}
               </div>
             </div>
 
@@ -171,13 +147,13 @@ export default function ProgressPage() {
               <div className="flex items-center justify-between pb-3 border-b border-white/10">
                 <div>
                   <h3 className="text-[15px] font-bold text-white">Monthly Practice Volume</h3>
-                  <p className="text-[11px] text-slate-400">Consistent monthly solving rate</p>
+                  <p className="text-[11px] text-slate-400">Monthly question attempts</p>
                 </div>
-                <span className="text-[12px] font-mono-numbers text-slate-400">Avg ~470/mo</span>
+                {monthlyTrends.length ? <span className="text-[12px] font-mono-numbers text-slate-400">{monthlyTrends.length} months</span> : null}
               </div>
 
               <div className="h-56 mt-4">
-                <ResponsiveContainer width="100%" height="100%">
+                {monthlyTrends.length ? <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={monthlyTrends}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
                     <XAxis dataKey="month" stroke="#64748B" fontSize={12} tickLine={false} />
@@ -193,7 +169,7 @@ export default function ProgressPage() {
                     />
                     <Bar dataKey="questions" fill="#7C3AED" radius={[6, 6, 0, 0]} />
                   </BarChart>
-                </ResponsiveContainer>
+                </ResponsiveContainer> : <p className="pt-20 text-center text-sm text-slate-500">No question history yet</p>}
               </div>
             </div>
           </div>
@@ -205,28 +181,28 @@ export default function ProgressPage() {
             </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
-              {subjectPerformance.map((subj, idx) => (
+              {subjectPerformance.length ? subjectPerformance.map((subj, idx) => (
                 <div key={idx} className="p-4 rounded-[12px] bg-white/5 border border-white/10">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-white text-[14px]">{subj.subject}</span>
                     <span className="text-[13px] font-mono-numbers font-bold text-cyan-400">
-                      {subj.accuracy}%
+                      {subj.accuracy == null ? "—" : `${subj.accuracy}%`}
                     </span>
                   </div>
 
                   <div className="w-full h-2 rounded-full bg-white/10 mt-3 overflow-hidden">
                     <div
                       className="h-full rounded-full transition-all duration-500"
-                      style={{ width: `${subj.accuracy}%`, backgroundColor: subj.color }}
+                      style={{ width: `${subj.accuracy ?? 0}%`, backgroundColor: ["#8B5CF6", "#06B6D4", "#F59E0B", "#10B981"][idx % 4] }}
                     />
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mt-2 font-mono-numbers">
-                    <span>{subj.solved} solved</span>
-                    <span>Target: 75%</span>
+                    <span>{subj.solved} questions</span>
+                    <span>Accuracy</span>
                   </div>
                 </div>
-              ))}
+              )) : <p className="py-8 text-center text-sm text-slate-500 sm:col-span-3">No subject data available yet</p>}
             </div>
           </div>
         </main>

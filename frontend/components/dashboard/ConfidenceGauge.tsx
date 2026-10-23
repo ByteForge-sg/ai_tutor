@@ -1,26 +1,16 @@
 "use client";
 
 import React from "react";
-import { Maximize2, ShieldCheck } from "lucide-react";
+import { Maximize2 } from "lucide-react";
 
 interface ConfidenceGaugeProps {
-  score?: number;
-  performance?: number;
-  accuracy?: number;
-  efficiency?: number;
-  reliability?: number;
+  score: number | null;
 }
 
-export default function ConfidenceGauge({
-  score = 82.5,
-  performance = 24,
-  accuracy = 32,
-  efficiency = 27,
-  reliability = 17,
-}: ConfidenceGaugeProps) {
+export default function ConfidenceGauge({ score }: ConfidenceGaugeProps) {
   // 36 tick segments across a 180-degree semi-circular arc matching the reference image!
   const totalTicks = 38;
-  const activeTicksCount = Math.round((score / 100) * totalTicks);
+  const activeTicksCount = score === null ? 0 : Math.round((score / 100) * totalTicks);
 
   const getTickColor = (index: number) => {
     const ratio = index / totalTicks;
@@ -48,11 +38,11 @@ export default function ConfidenceGauge({
         <div className="relative w-[240px] h-[130px] flex items-end justify-center overflow-hidden">
           <svg viewBox="0 0 240 130" className="w-full h-full">
             {/* Outer calibration marks */}
-            <text x="30" y="115" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">-100</text>
-            <text x="55" y="55" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">-50</text>
-            <text x="115" y="20" fill="#94A3B8" fontSize="10" fontFamily="JetBrains Mono">0</text>
-            <text x="175" y="55" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">+50</text>
-            <text x="195" y="115" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">+100</text>
+            <text x="30" y="115" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">0</text>
+            <text x="55" y="55" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">25</text>
+            <text x="115" y="20" fill="#94A3B8" fontSize="10" fontFamily="JetBrains Mono">50</text>
+            <text x="175" y="55" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">75</text>
+            <text x="195" y="115" fill="#64748B" fontSize="10" fontFamily="JetBrains Mono">100</text>
 
             {/* Generated Radial Tick Bars */}
             {Array.from({ length: totalTicks }).map((_, i) => {
@@ -92,38 +82,16 @@ export default function ConfidenceGauge({
           {/* Large Center Score */}
           <div className="absolute bottom-1 text-center">
             <span className="text-[34px] font-extrabold font-mono-numbers text-white tracking-tight drop-shadow-md">
-              {score}
+              {score === null ? "—" : `${score}%`}
             </span>
             <span className="block text-[11px] font-medium text-slate-400 mt-[-4px]">
-              Overall Score
+              Accuracy
             </span>
           </div>
         </div>
       </div>
 
-      {/* Bottom Metric Dots Legend matching the reference image */}
-      <div className="grid grid-cols-2 gap-y-2 gap-x-4 pt-3 border-t border-white/10 text-[12px] font-mono-numbers">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#FACC15] shadow-xs shadow-yellow-500/50"></span>
-          <span className="text-slate-400">Performance</span>
-          <span className="font-bold text-white ml-auto">{performance}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#06B6D4] shadow-xs shadow-cyan-500/50"></span>
-          <span className="text-slate-400">Accuracy</span>
-          <span className="font-bold text-white ml-auto">{accuracy}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#3B82F6] shadow-xs shadow-blue-500/50"></span>
-          <span className="text-slate-400">Efficiency</span>
-          <span className="font-bold text-white ml-auto">{efficiency}%</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-[#EC4899] shadow-xs shadow-pink-500/50"></span>
-          <span className="text-slate-400">Reliability</span>
-          <span className="font-bold text-white ml-auto">{reliability}%</span>
-        </div>
-      </div>
+      <div className="pt-3 border-t border-white/10 text-center text-[12px] text-slate-400">Based on your answered question attempts</div>
     </div>
   );
 }
