@@ -39,7 +39,7 @@ export default function Sidebar({ onOpenCoach }: SidebarProps) {
 
   const handleLogout = () => {
     logout();
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (

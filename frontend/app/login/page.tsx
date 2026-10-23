@@ -48,7 +48,7 @@ export default function LoginPage() {
       } else {
         await signin({ email: email.trim(), password });
       }
-      router.replace("/dashboard");
+      router.push("/dashboard");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
     } finally {
