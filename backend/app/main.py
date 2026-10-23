@@ -23,7 +23,8 @@ from app.models import (
     PracticeAnswerRequest, PracticeAnswerResponse, MistakeDiagnosisOut,
     DashboardSummaryOut, AIChatRequest, AIChatResponse,
     FixWeaknessInterventionOut, CompleteInterventionRequest,
-    InterventionResultOut, WeaknessItem
+    InterventionResultOut, WeaknessItem,
+    NCERTChapterOut, NCERTChatRequest, NCERTChatResponse, NCERTSourceChunk
 )
 from app.attempts import (
     create_test_attempt, get_active_test_attempt, record_integrity_event,
@@ -34,6 +35,8 @@ from app.mistakes import diagnose_mistake
 from app.weaknesses import get_user_weaknesses, generate_intervention, complete_intervention
 from app.analytics import get_dashboard_analytics
 from app.ai import generate_chat_response
+from app.ncert.service import answer_ncert_question, list_available_chapters
+from app.ncert.retrieval import get_indexed_status
 
 logger = logging.getLogger(__name__)
 app_logger = logging.getLogger("app")
@@ -738,6 +741,46 @@ def analyze_single_mistake(question_id: str, selected_answer: str, time_taken_se
     diag = diagnose_mistake(dict(q), selected_answer, time_taken_seconds, user_id=current_user["id"])
     return diag
 
+# ----------------- NCERT RAG BOT -----------------
+@app.get("/ncert/chapters", response_model=List[NCERTChapterOut])
+def get_ncert_chapters():
+    """List available NCERT chapters and their vector indexing status."""
+    return list_available_chapters()
+
+
+@app.get("/ncert/status")
+def get_ncert_rag_status(chapter_id: str = "physics-units"):
+    """Get the live status of the NCERT vector collection."""
+    return get_indexed_status(chapter_id=chapter_id)
+
+
+@app.post("/ncert/chat", response_model=NCERTChatResponse)
+def chat_with_ncert_bot(req: NCERTChatRequest):
+    """
+    RAG endpoint grounded strictly in the selected NCERT chapter.
+    Accepts user question, retrieves top similar passages from Qdrant,
+    and returns a grounded answer with traceable similarity scores.
+    """
+    try:
+        return answer_ncert_question(
+            chapter_id=req.chapter_id,
+            question=req.question,
+            history=req.history,
+            top_k=req.top_k or 3,
+        )
+    except Exception as exc:
+        logger.error("NCERT chat failed: %s", exc)
+        return {
+            "answer": "The NCERT context was retrieved, but the answer could not be generated right now.",
+            "chapter": "Units and Measurements",
+            "subject": "Physics",
+            "sources": [],
+            "retrieved_sections": [],
+            "is_out_of_scope": False,
+            "generation_unavailable": True,
+        }
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=True)

@@ -320,3 +320,44 @@ class AIChatResponse(BaseModel):
     reply: str
     mode: str
     suggestions: Optional[List[str]] = None
+
+
+# ----------------- NCERT RAG MODELS -----------------
+class NCERTSourceChunk(BaseModel):
+    chunk_id: str
+    chapter_id: Optional[str] = None
+    chapter: Optional[str] = None
+    subject: Optional[str] = None
+    section: str
+    source: Optional[str] = None
+    text: str
+    similarity: float
+
+
+class NCERTChatRequest(BaseModel):
+    chapter_id: str = "physics-units"
+    question: str
+    history: Optional[List[Dict[str, str]]] = None
+    top_k: Optional[int] = 3
+
+
+class NCERTChatResponse(BaseModel):
+    answer: str
+    chapter: str
+    subject: str
+    sources: List[NCERTSourceChunk] = Field(default_factory=list)
+    retrieved_sections: List[str] = Field(default_factory=list)
+    is_out_of_scope: bool = False
+    generation_unavailable: Optional[bool] = False
+
+
+class NCERTChapterOut(BaseModel):
+    id: str
+    subject: str
+    chapter: str
+    class_level: str
+    source: str
+    is_indexed: bool
+    chunk_count: int
+    suggested_questions: List[str]
+
