@@ -23,6 +23,7 @@ import {
   TrendingUp
 } from "lucide-react";
 import { getAuthToken } from "@/lib/auth";
+import { fetchCurrentUser } from "@/lib/api";
 
 export default function LandingPage() {
   const router = useRouter();
@@ -37,13 +38,18 @@ export default function LandingPage() {
     { title: "Improvement", subtitle: "Measurable Gain", desc: "Real recalculated before vs after accuracy verified by data." },
   ];
 
-  const navigateWithSession = (destination: string) => {
+  const navigateWithSession = async (destination: string) => {
     if (!getAuthToken()) {
       router.push("/login");
       return;
     }
 
-    router.push(destination);
+    try {
+      await fetchCurrentUser();
+      router.push(destination);
+    } catch {
+      router.replace("/login");
+    }
   };
 
   return (

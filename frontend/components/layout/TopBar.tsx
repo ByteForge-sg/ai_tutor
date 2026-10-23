@@ -123,8 +123,10 @@ export default function TopBar({ currentExam, onExamChange, onOpenCoach }: TopBa
         </div>
 
         {/* User Profile Pill matching the image (Avatar + Name + Gold Premium Badge) */}
-        <div
-          onClick={() => router.push("/login")}
+        <button
+          type="button"
+          onClick={() => router.push("/profile")}
+          aria-label="Open profile"
           className="flex items-center gap-3 p-1.5 pl-2 pr-3.5 rounded-[12px] bg-white/5 border border-white/10 hover:border-purple-500/40 transition-all cursor-pointer group"
         >
           <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-600/30 border border-purple-500/40 shrink-0">
@@ -148,7 +150,7 @@ export default function TopBar({ currentExam, onExamChange, onOpenCoach }: TopBa
               {currentExam} Track
             </div>
           </div>
-        </div>
+        </button>
       </div>
     </header>
   );
